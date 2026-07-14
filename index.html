@@ -303,7 +303,7 @@
         </div>
       </div>
       <table id="raTable">
-        <thead><tr><th>Fecha</th><th>Ganancia (€)</th><th>Aportado (€)</th><th>Rentabilidad</th><th></th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Ganancia (€)</th><th>Aportado (€)</th><th>Variación</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
     </section>
@@ -520,6 +520,7 @@ function applyMigrations(d) {
   }
   if (!Array.isArray(d.simulations)) d.simulations = [];
   if (!Array.isArray(d.raHistory)) d.raHistory = [];
+  if (!Array.isArray(d.robo)) d.robo = [];
   if (!Array.isArray(d.commodities)) d.commodities = JSON.parse(JSON.stringify(SEED.commodities));
   // Rellenar dividendoUd si falta (dato añadido a posteriori)
   const DIV_DEFAULTS = { FGEQ: 0.21, VGWD: 2.08, EHDV: 1.41 };
@@ -1395,23 +1396,26 @@ document.getElementById('linkFileBtn').addEventListener('click', () => {
 function renderRoboAdvisor() {
   const tbody = document.querySelector('#raTable tbody');
   if (!tbody) return;
-  const rows = (data.history || []).slice().sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const rows = (data.robo || []).slice().sort((a, b) => a.fecha.localeCompare(b.fecha));
+
   tbody.innerHTML = rows.map((r, i) => {
-    const _ap = r.aport ?? r.aportado; const rent = _ap ? ((r.va / _ap) * 100).toFixed(1) + '%' : '—';
+    const prev = i > 0 ? rows[i-1].valor : null;
+    const diff = prev !== null ? r.valor - prev : null;
+    const diffHtml = diff === null ? '—' : `<span class="${diff>=0?'pos':'neg'}">${diff>=0?'+':''}${fmtEUR(diff)}</span>`;
     return `<tr>
       <td>${r.fecha}</td>
-      <td class="${r.va >= 0 ? 'pos' : 'neg'}">${fmtEUR(r.va)}</td>
-      <td>${(r.aport ?? r.aportado) != null ? fmtEUR(r.aport ?? r.aportado) : '—'}</td>
-      <td>${rent}</td>
+      <td class="${r.valor >= 0 ? 'pos' : 'neg'}">${fmtEUR(r.valor)}</td>
+      <td>${r.aportado != null ? fmtEUR(r.aportado) : '—'}</td>
+      <td>${diffHtml}</td>
       <td><button class="del-btn" data-ra="${i}">✕</button></td>
     </tr>`;
   }).join('') || '<tr><td colspan="5" style="color:#9a9ca3;text-align:center;padding:16px;">Sin registros aún</td></tr>';
   tbody.querySelectorAll('.del-btn').forEach(btn => {
     btn.addEventListener('click', e => {
       const idx = +e.target.dataset.ra;
-      const sorted = (data.history || []).slice().sort((a, b) => a.fecha.localeCompare(b.fecha));
+      const sorted = (data.robo || []).slice().sort((a, b) => a.fecha.localeCompare(b.fecha));
       const toRemove = sorted[idx];
-      data.history = data.history.filter(r => r !== toRemove);
+      data.robo = data.robo.filter(r => r !== toRemove);
       save(); renderRoboAdvisor();
     });
   });
@@ -1425,13 +1429,13 @@ function renderRoboAdvisor() {
         datasets: [
           {
             label: 'Ganancia (€)',
-            data: rows.map(r => r.va),
+            data: rows.map(r => r.valor),
             borderColor: '#5fd99a', backgroundColor: 'rgba(95,217,154,0.12)',
             fill: true, tension: 0.3, pointRadius: 4
           },
           {
             label: 'Aportado (€)',
-            data: rows.map(r => r.aport ?? r.aportado ?? null),
+            data: rows.map(r => r.aportado ?? null),
             borderColor: '#6f80f5', backgroundColor: 'rgba(111,128,245,0.10)',
             fill: true, tension: 0.3, pointRadius: 4, spanGaps: true
           }
@@ -1454,11 +1458,11 @@ function renderRoboAdvisor() {
 
 document.getElementById('raAddBtn').addEventListener('click', () => {
   const fecha = document.getElementById('raDate').value;
-  const va = parseFloat(document.getElementById('raGanancia').value);
-  const aport = parseFloat(document.getElementById('raAportado').value) || null;
-  if (!fecha || isNaN(va)) return;
-  if (!data.history) data.history = [];
-  data.history.push({ fecha, va, ...(aport != null && { aport }) });
+  const valor = parseFloat(document.getElementById('raGanancia').value);
+  const aportado = parseFloat(document.getElementById('raAportado').value) || undefined;
+  if (!fecha || isNaN(valor)) return;
+  if (!data.robo) data.robo = [];
+  data.robo.push({ fecha, valor, ...(aportado !== undefined && { aportado }) });
   save(); renderRoboAdvisor();
   document.getElementById('raDate').value = '';
   document.getElementById('raGanancia').value = '';
@@ -1467,22 +1471,12 @@ document.getElementById('raAddBtn').addEventListener('click', () => {
 
 document.getElementById('raSaveHoyBtn').addEventListener('click', () => {
   const m = computeAll();
-  if (!data.history) data.history = [];
+  if (!data.robo) data.robo = [];
   const fecha = new Date().toISOString().slice(0, 10);
-  const va = +(m.gpEUR + m.gpUSDinEUR + m.gpCommodities).toFixed(2);
-  data.history.push({ fecha, va });
+  const valor = +(m.gpEUR + m.gpUSDinEUR + (m.gpCommodities||0)).toFixed(2);
+  const aportado = +m.totalInvCombEUR.toFixed(2);
+  data.robo.push({ fecha, valor, aportado });
   save(); renderRoboAdvisor();
 });
 
-// Hook: render cuando se entra a la pestaña robo
-document.querySelectorAll('.tab-btn').forEach(btn => {
-  if (btn.dataset.tab === 'robo') {
-    btn.addEventListener('click', renderRoboAdvisor);
-  }
-});
-
-load();
-switchTab('resumen');
-</script>
-</body>
-</html>
+// Hook: render cuando se entra a la pestaña r
