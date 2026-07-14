@@ -3,8 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <title>Mi Cartera</title>
-<!-- v3: pestaña de ingresos y gastos mensuales -->
-
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
 <style>
   :root { color-scheme: dark; }
@@ -113,13 +111,11 @@
   .chart-wrap { position: relative; height: calc(100% - 26px); }
   .badge { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 999px; background: #232a4a; color: #93a3ff; margin-left: 6px; }
   .badge.div { background: #163328; color: #5fd99a; }
-  .badge.out { background: #3a1a1e; color: #f89b9b; }
-  .cat-row td { background: #20232b; }
-  .item-row td:first-child { padding-left: 26px; }
-  input.mensual-check { accent-color: #3a4ed6; cursor: pointer; }
   .hist-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
   .hist-row input { background: #14161b; color: #e7e7ea; border: 1px solid #343843; border-radius: 6px; padding: 5px 8px; font-size: 12.5px; }
-  .ticker-link { margin-left: 4px; font-size: 11px; text-decoration: none; }
+  .sim-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .sim-input-sm { width: 80px; background: #1c1f26; color: #e7e7ea; border: 1px solid #343843; border-radius: 6px; padding: 4px 6px; font-size: 12px; text-align: right; }
+  input.sim-input-sm:focus { outline: none; border-color: #3a4ed6; }
 </style>
 </head>
 <body>
@@ -149,6 +145,7 @@
   <div id="pinError" style="color:#f87171;font-size:13px;min-height:18px;"></div>
 </div>
 <!-- ──────────────────────────────────────────────────────────────────────────── -->
+
   <h1>Mi cartera de inversión</h1>
   <div class="sub">Datos guardados en este navegador (ya no se leen de ningún Excel/Sheet) · edítalos directamente abajo.</div>
 
@@ -157,7 +154,6 @@
     <button class="btn" id="resetBtn">Restablecer a valores iniciales</button>
     <button class="btn" id="backupBtn">📋 Backup a Google Sheets</button>
     <button class="btn" id="priceBtn">🔄 Actualizar precios (mercado)</button>
-    <button class="btn" id="apiKeyBtn">🔑 Usar mi propia API key</button>
     <button class="btn" id="exportBtn">⬇️ Exportar datos (JSON)</button>
     <button class="btn" id="importBtn">⬆️ Importar datos (JSON)</button>
     <input type="file" id="importFile" accept="application/json" style="display:none">
@@ -173,9 +169,7 @@
     <button class="tab-btn" data-tab="resumen">Resumen</button>
     <button class="tab-btn" data-tab="etfs">ETFs</button>
     <button class="tab-btn" data-tab="acciones">Acciones (equity)</button>
-    <button class="tab-btn" data-tab="robo">Robo-advisor</button>
-    <button class="tab-btn" data-tab="commodities">Commodities</button>
-    <button class="tab-btn" data-tab="gastos">Ingresos y gastos</button>
+    <button class="tab-btn" data-tab="simulacion">🔮 Simulación</button>
   </div>
 
   <!-- ===== RESUMEN ===== -->
@@ -208,15 +202,6 @@
         </div>
       </div>
     </section>
-    <section>
-      <h2>Ganancia/pérdida por mes (%)</h2>
-      <div class="charts-row single">
-        <div class="chart-card">
-          <h3>Variación mensual de la cartera (los 12 meses del año · ● = mes actual)</h3>
-          <div class="chart-wrap"><canvas id="monthlyChart"></canvas></div>
-        </div>
-      </div>
-    </section>
   </div>
 
   <!-- ===== ETFs ===== -->
@@ -230,14 +215,10 @@
     </div>
     <section>
       <h2>ETFs (cuenta EUR)</h2>
-      <div class="cols" style="grid-template-columns: 1fr;">
+      <div class="cols">
         <div>
           <p class="subgroup-title">Con reparto de dividendo <span class="badge div">Dist</span></p>
           <table id="etfDivTable"><thead></thead><tbody></tbody></table>
-          <div class="chart-card" style="margin-top:16px;">
-            <h3>Dividendo estimado por mes (€) <span id="divYearTotal" class="subgroup-title" style="font-weight:400;"></span></h3>
-            <div class="chart-wrap"><canvas id="divMonthlyChart"></canvas></div>
-          </div>
         </div>
         <div>
           <p class="subgroup-title">Acumulación (sin reparto) <span class="badge">Acc</span></p>
@@ -245,6 +226,33 @@
         </div>
       </div>
     </section>
+  </div>
+
+  <!-- ===== SIMULACIÓN ===== -->
+  <div class="page" data-page="simulacion">
+    <div class="sim-controls">
+      <select id="simSelect" style="background:#1c1f26;color:#e7e7ea;border:1px solid #343843;border-radius:8px;padding:6px 10px;font-size:13px;"></select>
+      <button class="btn small" id="simNewBtn">+ Nueva simulación</button>
+      <input id="simName" type="text" placeholder="Nombre de la simulación" style="background:#1c1f26;color:#e7e7ea;border:1px solid #343843;border-radius:8px;padding:6px 10px;font-size:13px;width:220px;">
+      <button class="btn small" id="simSaveBtn">💾 Guardar</button>
+      <button class="btn small" id="simDelBtn" style="color:#f87171;">🗑 Eliminar</button>
+      <span style="font-size:12px;color:#9a9ca3;margin-left:8px;">Objetivo:</span>
+      <span class="num-spin"><input type="number" id="simObjetivo" value="3000" min="0" step="100" style="width:90px;background:#1c1f26;color:#e7e7ea;border:1px solid #343843;border-radius:8px;padding:5px 8px;font-size:13px;"><span class="spin-btns"><button type="button" class="spin-btn spin-up" tabindex="-1">▲</button><button type="button" class="spin-btn spin-down" tabindex="-1">▼</button></span></span>
+      <span style="font-size:12px;color:#9a9ca3;">€/mes &nbsp;|&nbsp; Aportación mensual:</span>
+      <span class="num-spin"><input type="number" id="simAportacion" value="200" min="0" step="50" style="width:80px;background:#1c1f26;color:#e7e7ea;border:1px solid #343843;border-radius:8px;padding:5px 8px;font-size:13px;"><span class="spin-btns"><button type="button" class="spin-btn spin-up" tabindex="-1">▲</button><button type="button" class="spin-btn spin-down" tabindex="-1">▼</button></span></span>
+      <span style="font-size:12px;color:#9a9ca3;">€/mes</span>
+    </div>
+    <div class="grid-top" id="topStatsSim" style="margin-top:16px;"></div>
+    <div class="cols" style="margin-top:20px;align-items:start;">
+      <div>
+        <p class="subgroup-title">ETFs con dividendo <span class="badge div">Dist</span></p>
+        <table id="simDivTable"><thead></thead><tbody></tbody></table>
+      </div>
+      <div>
+        <p class="subgroup-title">ETFs acumulación <span class="badge">Acc</span></p>
+        <table id="simAccTable"><thead></thead><tbody></tbody></table>
+      </div>
+    </div>
   </div>
 
   <!-- ===== ACCIONES ===== -->
@@ -259,80 +267,6 @@
     <section>
       <h2>Acciones individuales (cuenta USD)</h2>
       <table id="stocksTable"><thead></thead><tbody></tbody></table>
-    </section>
-  </div>
-
-  <!-- ===== ROBO-ADVISOR ===== -->
-  <div class="page" data-page="robo">
-    <div class="grid-top" id="topStatsRobo"></div>
-    <div class="charts-row single">
-      <div class="chart-card" style="height:280px">
-        <h3>Evolución valor vs. aportado (€)</h3>
-        <div class="chart-wrap"><canvas id="roboChart"></canvas></div>
-      </div>
-    </div>
-    <section>
-      <h2>Robo-advisor (cuenta EUR) — entrada manual diaria</h2>
-      <div class="sub" style="margin-bottom:14px;">No tiene posiciones individuales: cada día anota el valor total de la cuenta y el total aportado hasta ese día. El valor actual se suma al balance general de la cartera.</div>
-      <div class="hist-row">
-        <input type="date" id="roboDate">
-        <span class="num-spin"><input type="number" step="0.01" placeholder="Valor cuenta €" id="roboVal" style="width:120px"><span class="spin-btns"><button type="button" class="spin-btn spin-up" tabindex="-1">▲</button><button type="button" class="spin-btn spin-down" tabindex="-1">▼</button></span></span>
-        <span class="num-spin"><input type="number" step="0.01" placeholder="Aportado total €" id="roboAportado" style="width:130px"><span class="spin-btns"><button type="button" class="spin-btn spin-up" tabindex="-1">▲</button><button type="button" class="spin-btn spin-down" tabindex="-1">▼</button></span></span>
-        <button class="btn small" id="roboAddBtn">+ Añadir punto</button>
-      </div>
-      <table id="roboTable"><thead></thead><tbody></tbody></table>
-    </section>
-  </div>
-
-  <!-- ===== COMMODITIES ===== -->
-  <div class="page" data-page="commodities">
-    <div class="grid-top" id="topStatsCommodities"></div>
-    <div class="charts-row single">
-      <div class="chart-card">
-        <h3>Ganancia / Pérdida por commodity (%)</h3>
-        <div class="chart-wrap"><canvas id="commoGpChart"></canvas></div>
-      </div>
-    </div>
-    <section>
-      <h2>Commodities (cuenta EUR)</h2>
-      <table id="commoditiesTable"><thead></thead><tbody></tbody></table>
-    </section>
-  </div>
-
-  <!-- ===== INGRESOS Y GASTOS ===== -->
-  <div class="page" data-page="gastos">
-    <div class="toolbar" style="margin-bottom:18px;">
-      <button class="btn small" id="mesPrev">◀</button>
-      <input type="month" id="mesInput" class="cell-input" style="width:auto;padding:6px 8px;">
-      <button class="btn small" id="mesNext">▶</button>
-      <button class="btn small" id="divFillBtn">💶 Rellenar dividendos estimados de la cartera</button>
-      <span id="divFillStatus" style="font-size:12px;color:#9a9ca3;"></span>
-    </div>
-    <div class="grid-top" id="topStatsGastos"></div>
-    <div class="charts-row">
-      <div class="chart-card">
-        <h3>Gastos del mes por categoría</h3>
-        <div class="chart-wrap"><canvas id="gastosPieChart"></canvas></div>
-      </div>
-      <div class="chart-card">
-        <h3>Ingresos vs. gastos por mes (año seleccionado)</h3>
-        <div class="chart-wrap"><canvas id="balanceChart"></canvas></div>
-      </div>
-    </div>
-    <section>
-      <h2>Conteo mensual — no forma parte de la cartera de inversión</h2>
-      <div class="cols">
-        <div>
-          <p class="subgroup-title">Ingresos <span class="badge div">Income</span></p>
-          <table id="incomeTable"><thead></thead><tbody></tbody></table>
-        </div>
-        <div>
-          <p class="subgroup-title">Gastos mensuales (fijos) <span class="badge">Mensual</span></p>
-          <table id="expenseTableFijo"><thead></thead><tbody></tbody></table>
-          <p class="subgroup-title" style="margin-top:18px;">Gastos puntuales del mes <span class="badge out">Puntual</span></p>
-          <table id="expenseTableVar"><thead></thead><tbody></tbody></table>
-        </div>
-      </div>
     </section>
   </div>
 
@@ -369,12 +303,8 @@ const SEED = {
     { activo: 'Netflix', simbolo: 'NFLX', cantidad: 0.39, precioCompra: 86.88, precioActual: 74.76 },
     { activo: 'Palantir', simbolo: 'PLTR', cantidad: 0.12, precioCompra: 76.93, precioActual: 113.83 }
   ],
-  commodities: [
-    { activo: 'Oro', simbolo: 'XAU', cantidad: 0.0029, precioCompra: 2634.15, precioActual: 3526.57 }
-  ],
   history: [],
-  robo: [],
-  budget: {}
+  simulations: []
 };
 
 // Histórico recuperado del Excel/Sheet original, tal cual estaba: valor de
@@ -413,24 +343,6 @@ const SYMBOL_TO_FMP = {
   SPCX: 'SPCX',
   NFLX: 'NFLX',
   PLTR: 'PLTR'
-};
-
-// Meses de reparto de dividendo por ETF (0 = Enero ... 11 = Diciembre).
-// Fuente: calendarios de distribución trimestral de cada fondo.
-//  - FGEQ (Fidelity Global Quality Income): febrero, mayo, agosto, noviembre.
-//  - VGWD (Vanguard All-World High Dividend): marzo, junio, septiembre, diciembre.
-//  - EHDV (Invesco EURO STOXX High Div Low Vol): marzo, junio, septiembre, diciembre.
-const DIV_MONTHS = {
-  FGEQ: [1, 4, 7, 10],
-  VGWD: [2, 5, 8, 11],
-  EHDV: [2, 5, 8, 11]
-};
-
-// Moneda en la que cada ETF reparte el dividendo. FGEQ reparte en dólares,
-// así que su div/ud se convierte a EUR con el tipo de cambio (data.fx).
-// Los que no aparecen aquí se consideran en EUR.
-const DIV_CURRENCY = {
-  FGEQ: 'USD'
 };
 
 let data = null;
@@ -476,6 +388,7 @@ function checkPin() {
   }
 }
 
+// Mostrar aviso si ya está bloqueado al cargar la página
 (function initPinScreen() {
   const lockedUntil = parseInt(localStorage.getItem(PIN_LOCKED_KEY) || '0', 10);
   if (Date.now() < lockedUntil) {
@@ -503,7 +416,7 @@ async function fbRead() {
     const r = await fetch(url);
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const json = await r.json();
-    return json;
+    return json; // null si la DB está vacía
   } catch (e) {
     setSyncStatus('⚠️ Sin conexión con Firebase', '#e0a93a');
     return null;
@@ -536,21 +449,17 @@ function applyMigrations(d) {
   } else if (!d.history || d.history.length === 0) {
     d.history = JSON.parse(JSON.stringify(BACKFILL_HISTORY));
   }
-  if (!Array.isArray(d.robo)) d.robo = [];
-  if (!Array.isArray(d.commodities)) d.commodities = JSON.parse(JSON.stringify(SEED.commodities));
-  if (!d.budget || typeof d.budget !== 'object' || Array.isArray(d.budget)) d.budget = {};
+  if (!Array.isArray(d.simulations)) d.simulations = [];
+  // Rellenar dividendoUd si falta (dato añadido a posteriori)
   const DIV_DEFAULTS = { FGEQ: 0.21, VGWD: 2.08, EHDV: 1.41 };
   (d.etfsDiv || []).forEach(r => {
-    if ((!r.dividendoUd || r.dividendoUd === 0) && DIV_DEFAULTS[r.simbolo] !== undefined) {
-      r.dividendoUd = DIV_DEFAULTS[r.simbolo];
-    }
+    if (!r.dividendoUd && DIV_DEFAULTS[r.simbolo]) r.dividendoUd = DIV_DEFAULTS[r.simbolo];
   });
   return d;
-  // Nota: migrateBudgetGastos() usa la variable global `data`, por eso
-  // se llama explícitamente justo después de asignar data, no aquí.
 }
 
 function load() {
+  // Carga local inmediata (sin esperar red) para que la página aparezca rápido
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     data = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(SEED));
@@ -558,27 +467,29 @@ function load() {
     data = JSON.parse(JSON.stringify(SEED));
   }
   data = applyMigrations(data);
-  migrateBudgetGastos();
 
+  // Después sincroniza con Firebase en segundo plano
   if (FIREBASE_DB_URL) {
     setSyncStatus('☁️ Cargando desde la nube…', '#9a9ca3');
     fbRead().then(remote => {
       if (!remote) {
-        fbWrite(data);
+        // DB vacía o sin conexión: sube los datos locales
+        if (FIREBASE_DB_URL) fbWrite(data);
         setSyncStatus('');
         return;
       }
       remote = applyMigrations(remote);
+      // Si el remoto tiene más entradas de histórico lo consideramos más reciente
       const localLen = (data.history || []).length;
       const remoteLen = (remote.history || []).length;
       if (remoteLen >= localLen) {
         data = remote;
-        migrateBudgetGastos();
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
         renderAll();
         setSyncStatus('✅ Datos de la nube cargados', '#4ade80');
         setTimeout(() => setSyncStatus(''), 3000);
       } else {
+        // Los datos locales son más nuevos, los subimos
         fbWrite(data);
       }
     });
@@ -588,7 +499,7 @@ function load() {
 function save() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   if (typeof writeDataToFile === 'function') writeDataToFile();
-  fbWrite(data);
+  fbWrite(data); // no bloqueante, muestra estado en syncStatus
 }
 
 function fmtEUR(n) { return (n < 0 ? '-' : '') + Math.abs(n).toLocaleString('es-ES', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' €'; }
@@ -601,13 +512,7 @@ function computed(r) {
   const valorAct = r.cantidad * r.precioActual;
   const gpAbs = valorAct - totalInv;
   const gpPct = totalInv ? (gpAbs / totalInv) * 100 : 0;
-  const divUd = r.dividendoUd || 0;
-  // Si el ETF reparte en USD, convertimos el dividendo a EUR con el tipo de cambio.
-  const divFx = DIV_CURRENCY[r.simbolo] === 'USD' ? (data && data.fx ? data.fx : 1) : 1;
-  const divUdEUR = divUd * divFx;
-  const divAnual = r.cantidad * divUdEUR;
-  const divYield = valorAct ? (divAnual / valorAct) * 100 : 0;
-  return { ...r, totalInv, valorAct, gpAbs, gpPct, divUd, divUdEUR, divAnual, divYield, divCurrency: DIV_CURRENCY[r.simbolo] || 'EUR' };
+  return { ...r, totalInv, valorAct, gpAbs, gpPct };
 }
 
 function statCard(label, value, cls) {
@@ -618,38 +523,23 @@ function destroyChart(key) {
   if (charts[key]) { charts[key].destroy(); delete charts[key]; }
 }
 
-function tickerLink(c) {
-  if (SYMBOL_TO_FMP[(c.simbolo || '').toUpperCase()]) return '';
-  const q = encodeURIComponent((c.activo || c.simbolo || '') + ' cotización');
-  return `<a class="ticker-link" href="https://www.google.com/search?q=${q}" target="_blank" rel="noopener" title="Sin actualización automática · buscar cotización manualmente">🔗</a>`;
-}
-
-function renderAssetTable(elId, group, currency, opts) {
-  opts = opts || {};
+function renderAssetTable(elId, group, currency) {
   const el = document.getElementById(elId);
   const fmt = currency === 'USD' ? fmtUSD : fmtEUR;
-  const colCount = opts.showDividend ? 12 : 10;
-
-  el.querySelector('thead').innerHTML = opts.showDividend
-    ? '<tr><th>Activo</th><th>Símbolo</th><th>Cant.</th><th>P. compra</th><th>P. actual</th><th>Div/ud anual</th><th>Invertido</th><th>Valor act.</th><th>Div. anual</th><th>G/P</th><th>G/P %</th><th></th></tr>'
-    : '<tr><th>Activo</th><th>Símbolo</th><th>Cant.</th><th>P. compra</th><th>P. actual</th><th>Invertido</th><th>Valor act.</th><th>G/P</th><th>G/P %</th><th></th></tr>';
+  el.querySelector('thead').innerHTML =
+    '<tr><th>Activo</th><th>Símbolo</th><th>Cant.</th><th>P. compra</th><th>P. actual</th><th>Invertido</th><th>Valor act.</th><th>G/P</th><th>G/P %</th><th></th></tr>';
 
   const rows = data[group].map((r, i) => {
     const c = computed(r);
-    const divHint = c.divCurrency === 'USD'
-      ? `<span class="price-stat" title="Reparto en USD · convertido a EUR con el tipo de cambio">$${c.divUd} → ${fmtEUR(c.divUdEUR)}</span>` : '';
-    const divCells = opts.showDividend ? `
-      <td><span class="num-spin"><input class="cell-input" id="cell-${group}-${i}-dividendoUd" data-field="dividendoUd" type="number" step="0.01" value="${c.divUd}"><span class="spin-btns"><button type="button" class="spin-btn spin-up" tabindex="-1">▲</button><button type="button" class="spin-btn spin-down" tabindex="-1">▼</button></span></span>${divHint}</td>` : '';
-    const divAnualCell = opts.showDividend ? `<td>${fmt(c.divAnual)}</td>` : '';
     return `
     <tr data-idx="${i}">
       <td><input class="cell-input name" id="cell-${group}-${i}-activo" data-field="activo" value="${c.activo}"><span class="price-stat" id="pstat-${group}-${i}"></span></td>
-      <td><input class="cell-input sym" id="cell-${group}-${i}-simbolo" data-field="simbolo" value="${c.simbolo}">${tickerLink(c)}</td>
+      <td><input class="cell-input sym" id="cell-${group}-${i}-simbolo" data-field="simbolo" value="${c.simbolo}"></td>
       <td><span class="num-spin"><input class="cell-input" id="cell-${group}-${i}-cantidad" data-field="cantidad" type="number" step="0.01" value="${c.cantidad}"><span class="spin-btns"><button type="button" class="spin-btn spin-up" tabindex="-1">▲</button><button type="button" class="spin-btn spin-down" tabindex="-1">▼</button></span></span></td>
       <td><span class="num-spin"><input class="cell-input" id="cell-${group}-${i}-precioCompra" data-field="precioCompra" type="number" step="0.01" value="${c.precioCompra}"><span class="spin-btns"><button type="button" class="spin-btn spin-up" tabindex="-1">▲</button><button type="button" class="spin-btn spin-down" tabindex="-1">▼</button></span></span></td>
-      <td><span class="num-spin"><input class="cell-input" id="cell-${group}-${i}-precioActual" data-field="precioActual" type="number" step="0.01" value="${c.precioActual}"><span class="spin-btns"><button type="button" class="spin-btn spin-up" tabindex="-1">▲</button><button type="button" class="spin-btn spin-down" tabindex="-1">▼</button></span></span></td>${divCells}
+      <td><span class="num-spin"><input class="cell-input" id="cell-${group}-${i}-precioActual" data-field="precioActual" type="number" step="0.01" value="${c.precioActual}"><span class="spin-btns"><button type="button" class="spin-btn spin-up" tabindex="-1">▲</button><button type="button" class="spin-btn spin-down" tabindex="-1">▼</button></span></span></td>
       <td>${fmt(c.totalInv)}</td>
-      <td>${fmt(c.valorAct)}</td>${divAnualCell}
+      <td>${fmt(c.valorAct)}</td>
       <td class="${gpClass(c.gpAbs)}">${fmt(c.gpAbs)}</td>
       <td class="${gpClass(c.gpPct)}">${fmtPct(c.gpPct)}</td>
       <td><button class="del-btn" data-idx="${i}">✕</button></td>
@@ -658,7 +548,7 @@ function renderAssetTable(elId, group, currency, opts) {
 
   const addRow = `
     <tr class="add-row">
-      <td colspan="${colCount}"><button class="btn small" data-add="${group}">+ Añadir activo</button></td>
+      <td colspan="10"><button class="btn small" data-add="${group}">+ Añadir activo</button></td>
     </tr>`;
 
   el.querySelector('tbody').innerHTML = rows + addRow;
@@ -668,7 +558,7 @@ function renderAssetTable(elId, group, currency, opts) {
       const idx = +e.target.closest('tr').dataset.idx;
       const field = e.target.dataset.field;
       let val = e.target.value;
-      if (field === 'cantidad' || field === 'precioCompra' || field === 'precioActual' || field === 'dividendoUd') {
+      if (field === 'cantidad' || field === 'precioCompra' || field === 'precioActual') {
         val = parseFloat(val); if (isNaN(val)) val = 0;
       }
       data[group][idx][field] = val;
@@ -682,17 +572,13 @@ function renderAssetTable(elId, group, currency, opts) {
   el.querySelectorAll('.del-btn').forEach(btn => {
     btn.addEventListener('click', e => {
       const idx = +e.target.dataset.idx;
-      const nombre = data[group][idx] ? data[group][idx].activo : 'este activo';
-      if (!confirm(`¿Eliminar "${nombre}"? Esta acción no se puede deshacer.`)) return;
       data[group].splice(idx, 1);
       save();
       renderAll();
     });
   });
   el.querySelector('[data-add]').addEventListener('click', e => {
-    const nuevo = { activo: 'Nuevo activo', simbolo: '---', cantidad: 0, precioCompra: 0, precioActual: 0 };
-    if (opts.showDividend) nuevo.dividendoUd = 0;
-    data[group].push(nuevo);
+    data[group].push({ activo: 'Nuevo activo', simbolo: '---', cantidad: 0, precioCompra: 0, precioActual: 0 });
     save();
     renderAll();
   });
@@ -727,18 +613,12 @@ function computeAll() {
   const etfDivRows = data.etfsDiv.map(computed);
   const etfAccRows = data.etfsAcc.map(computed);
   const stockRows = data.stocks.map(computed);
-  const commodityRows = data.commodities.map(computed);
   const sum = arr => arr.reduce((a, r) => a + r, 0);
 
   const valorActEUR = sum([...etfDivRows, ...etfAccRows].map(r => r.valorAct));
   const totalInvEUR = sum([...etfDivRows, ...etfAccRows].map(r => r.totalInv));
   const gpEUR = valorActEUR - totalInvEUR;
   const gpEURPct = totalInvEUR ? (gpEUR / totalInvEUR) * 100 : 0;
-
-  const valorActCommo = sum(commodityRows.map(r => r.valorAct));
-  const totalInvCommo = sum(commodityRows.map(r => r.totalInv));
-  const gpCommo = valorActCommo - totalInvCommo;
-  const gpCommoPct = totalInvCommo ? (gpCommo / totalInvCommo) * 100 : 0;
 
   const valorActUSD = sum(stockRows.map(r => r.valorAct));
   const totalInvUSD = sum(stockRows.map(r => r.totalInv));
@@ -747,60 +627,17 @@ function computeAll() {
 
   const valorActUSDinEUR = valorActUSD * data.fx;
   const totalInvUSDinEUR = totalInvUSD * data.fx;
-
-  // Robo-advisor: no tiene posiciones individuales, solo el último punto
-  // anotado manualmente (fecha más reciente) cuenta como valor/aportado
-  // actuales, y se suma al balance general de la cartera.
-  const roboSorted = [...data.robo].sort((a, b) => a.fecha.localeCompare(b.fecha));
-  const roboLast = roboSorted.length ? roboSorted[roboSorted.length - 1] : null;
-  const roboValorActual = roboLast ? roboLast.valor : 0;
-  const roboAportado = roboLast ? roboLast.aportado : 0;
-  const roboGP = roboValorActual - roboAportado;
-  const roboGPPct = roboAportado ? (roboGP / roboAportado) * 100 : 0;
-
-  const totalValorEUR = valorActEUR + valorActUSDinEUR + roboValorActual + valorActCommo;
-  const totalInvCombEUR = totalInvEUR + totalInvUSDinEUR + roboAportado + totalInvCommo;
+  const totalValorEUR = valorActEUR + valorActUSDinEUR;
+  const totalInvCombEUR = totalInvEUR + totalInvUSDinEUR;
   const totalGPEUR = totalValorEUR - totalInvCombEUR;
   const totalGPPct = totalInvCombEUR ? (totalGPEUR / totalInvCombEUR) * 100 : 0;
 
   const valorDiv = sum(etfDivRows.map(r => r.valorAct));
   const valorAcc = sum(etfAccRows.map(r => r.valorAct));
 
-  const totalDivAnual = sum(etfDivRows.map(r => r.divAnual));
-  const ingresoMensualDiv = totalDivAnual / 12;
-
-  return { etfDivRows, etfAccRows, stockRows, commodityRows, valorActEUR, totalInvEUR, gpEUR, gpEURPct,
+  return { etfDivRows, etfAccRows, stockRows, valorActEUR, totalInvEUR, gpEUR, gpEURPct,
     valorActUSD, totalInvUSD, gpUSD, gpUSDPct, valorActUSDinEUR, totalValorEUR, totalInvCombEUR,
-    totalGPEUR, totalGPPct, valorDiv, valorAcc, totalDivAnual, ingresoMensualDiv,
-    roboSorted, roboValorActual, roboAportado, roboGP, roboGPPct,
-    valorActCommo, totalInvCommo, gpCommo, gpCommoPct };
-}
-
-// Agrupa el histórico (G/P total en €) por mes y calcula la variación de ese
-// mes como % sobre el capital invertido actual. Se muestran los 12 meses del
-// año en curso aunque no tengan datos (quedan a +0%); el mes actual se marca
-// aparte para distinguirlo de los meses futuros, que también están a 0%
-// simplemente porque todavía no han pasado.
-function formatMonthLabel(ym) {
-  const [y, mo] = ym.split('-');
-  const names = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-  return names[(+mo) - 1] + ' ' + y;
-}
-function buildMonthlyGains(history, baseCapital, year) {
-  const sorted = [...history].sort((a, b) => a.fecha.localeCompare(b.fecha));
-  const byMonth = {};
-  sorted.forEach(h => { byMonth[h.fecha.slice(0, 7)] = h.va; }); // último valor de cada mes (sorted asc, se sobrescribe)
-  const months = [];
-  for (let mo = 1; mo <= 12; mo++) months.push(`${year}-${String(mo).padStart(2, '0')}`);
-  let prevVal = 0; // antes del primer punto registrado asumimos G/P = 0
-  return months.map(month => {
-    const hasData = Object.prototype.hasOwnProperty.call(byMonth, month);
-    const endVal = hasData ? byMonth[month] : prevVal; // sin datos ese mes -> sin cambio (0%)
-    const diff = endVal - prevVal;
-    const pct = baseCapital ? (diff / baseCapital) * 100 : 0;
-    prevVal = endVal;
-    return { month, pct, hasData };
-  });
+    totalGPEUR, totalGPPct, valorDiv, valorAcc };
 }
 
 function renderStats(m) {
@@ -808,35 +645,21 @@ function renderStats(m) {
     statCard('Valor total cartera', fmtEUR(m.totalValorEUR)) +
     statCard('Invertido total', fmtEUR(m.totalInvCombEUR)) +
     statCard('G/P total', fmtEUR(m.totalGPEUR) + ' (' + fmtPct(m.totalGPPct) + ')', gpClass(m.totalGPEUR)) +
-    statCard('ETFs (EUR) — valor', fmtEUR(m.valorActEUR) + ' · G/P ' + fmtEUR(m.gpEUR) + ' (' + fmtPct(m.gpEURPct) + ')', gpClass(m.gpEUR)) +
-    statCard('Acciones (USD) — valor', fmtUSD(m.valorActUSD) + ' · G/P ' + fmtUSD(m.gpUSD) + ' (' + fmtPct(m.gpUSDPct) + ')', gpClass(m.gpUSD)) +
-    statCard('Robo-advisor — valor', fmtEUR(m.roboValorActual) + ' · G/P ' + fmtEUR(m.roboGP) + ' (' + fmtPct(m.roboGPPct) + ')', gpClass(m.roboGP)) +
-    statCard('Commodities — valor', fmtEUR(m.valorActCommo) + ' · G/P ' + fmtEUR(m.gpCommo) + ' (' + fmtPct(m.gpCommoPct) + ')', gpClass(m.gpCommo)) +
-    statCard('Ingreso pasivo (div.) / mes', fmtEUR(m.ingresoMensualDiv));
+    statCard('ETFs (EUR) — valor', fmtEUR(m.valorActEUR), gpClass(m.gpEUR)) +
+    statCard('Acciones (USD) — valor', fmtUSD(m.valorActUSD), gpClass(m.gpUSD));
 
   document.getElementById('topStatsEtfs').innerHTML =
     statCard('Invertido ETFs', fmtEUR(m.totalInvEUR)) +
     statCard('Valor actual ETFs', fmtEUR(m.valorActEUR)) +
     statCard('G/P ETFs', fmtEUR(m.gpEUR) + ' (' + fmtPct(m.gpEURPct) + ')', gpClass(m.gpEUR)) +
     statCard('Con dividendo — valor', fmtEUR(m.valorDiv)) +
-    statCard('Acumulación — valor', fmtEUR(m.valorAcc)) +
-    statCard('Dividendo anual estimado', fmtEUR(m.totalDivAnual));
+    statCard('Acumulación — valor', fmtEUR(m.valorAcc));
 
   document.getElementById('topStatsAcciones').innerHTML =
     statCard('Invertido acciones', fmtUSD(m.totalInvUSD)) +
     statCard('Valor actual acciones', fmtUSD(m.valorActUSD)) +
     statCard('Valor en EUR', fmtEUR(m.valorActUSDinEUR)) +
     statCard('G/P acciones', fmtUSD(m.gpUSD) + ' (' + fmtPct(m.gpUSDPct) + ')', gpClass(m.gpUSD));
-
-  document.getElementById('topStatsRobo').innerHTML =
-    statCard('Aportado total', fmtEUR(m.roboAportado)) +
-    statCard('Valor actual', fmtEUR(m.roboValorActual)) +
-    statCard('G/P', fmtEUR(m.roboGP) + ' (' + fmtPct(m.roboGPPct) + ')', gpClass(m.roboGP));
-
-  document.getElementById('topStatsCommodities').innerHTML =
-    statCard('Invertido commodities', fmtEUR(m.totalInvCommo)) +
-    statCard('Valor actual commodities', fmtEUR(m.valorActCommo)) +
-    statCard('G/P commodities', fmtEUR(m.gpCommo) + ' (' + fmtPct(m.gpCommoPct) + ')', gpClass(m.gpCommo));
 }
 
 function renderChartsFor(tab, m) {
@@ -845,10 +668,10 @@ function renderChartsFor(tab, m) {
     charts.alloc = new Chart(document.getElementById('allocChart'), {
       type: 'doughnut',
       data: {
-        labels: ['ETFs con dividendo', 'ETFs acumulación', 'Acciones (USD→EUR)', 'Robo-advisor', 'Commodities'],
+        labels: ['ETFs con dividendo', 'ETFs acumulación', 'Acciones (USD→EUR)'],
         datasets: [{
-          data: [m.valorDiv, m.valorAcc, m.valorActUSDinEUR, m.roboValorActual, m.valorActCommo],
-          backgroundColor: ['#5fd99a', '#6f80f5', '#e0a93a', '#c084fc', '#f5c542']
+          data: [m.valorDiv, m.valorAcc, m.valorActUSDinEUR],
+          backgroundColor: ['#5fd99a', '#6f80f5', '#e0a93a']
         }]
       },
       options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#c7c8cd', boxWidth: 12, font: { size: 11 } } } } }
@@ -861,7 +684,7 @@ function renderChartsFor(tab, m) {
       data: {
         labels: sortedHist.map(h => h.fecha),
         datasets: [{
-          label: 'Ganancia/Pérdida total (€)', data: sortedHist.map(h => h.va),
+          label: 'Valor total cartera (€)', data: sortedHist.map(h => h.va),
           borderColor: '#6f80f5', backgroundColor: 'rgba(111,128,245,0.12)', fill: true, tension: 0.25
         }]
       },
@@ -871,32 +694,6 @@ function renderChartsFor(tab, m) {
         scales: {
           x: { ticks: { color: '#9a9ca3' }, grid: { color: '#262931' } },
           y: { ticks: { color: '#9a9ca3' }, grid: { color: '#262931' } }
-        }
-      }
-    });
-
-    destroyChart('monthly');
-    const now = new Date();
-    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const monthlyData = buildMonthlyGains(data.history, m.totalInvCombEUR, now.getFullYear());
-    charts.monthly = new Chart(document.getElementById('monthlyChart'), {
-      type: 'bar',
-      data: {
-        labels: monthlyData.map(d => formatMonthLabel(d.month) + (d.month === currentMonthKey ? ' ●' : '')),
-        datasets: [{
-          label: 'G/P mensual %', data: monthlyData.map(d => d.pct),
-          backgroundColor: monthlyData.map(d => d.month === currentMonthKey ? '#6f80f5' : (d.pct >= 0 ? '#4ade80' : '#f87171'))
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: { callbacks: { label: ctx => fmtPct(ctx.parsed.y) + (monthlyData[ctx.dataIndex].month === currentMonthKey ? ' (mes actual)' : '') } }
-        },
-        scales: {
-          x: { ticks: { color: '#9a9ca3' }, grid: { color: '#262931' } },
-          y: { ticks: { color: '#9a9ca3', callback: v => (v >= 0 ? '+' : '') + v + '%' }, grid: { color: '#262931' } }
         }
       }
     });
@@ -918,44 +715,6 @@ function renderChartsFor(tab, m) {
         }
       }
     });
-
-    destroyChart('divMonthly');
-    const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-    const DIV_COLORS = ['#5fd99a', '#6f80f5', '#e0a93a', '#c084fc', '#f5c542', '#f87171'];
-    const nowMonth = new Date().getMonth();
-    let totalAnual = 0;
-    const divDatasets = m.etfDivRows.map((r, idx) => {
-      const meses = DIV_MONTHS[r.simbolo] || [2, 5, 8, 11]; // por defecto: trimestral Mar/Jun/Sep/Dic
-      const porPago = (r.divAnual || 0) / meses.length;
-      const serie = new Array(12).fill(0);
-      meses.forEach(mes => { serie[mes] += porPago; });
-      totalAnual += (r.divAnual || 0);
-      return { label: r.simbolo, data: serie, backgroundColor: DIV_COLORS[idx % DIV_COLORS.length] };
-    });
-    document.getElementById('divYearTotal').textContent = '· Total año: ' + fmtEUR(totalAnual) + ' (≈ ' + fmtEUR(totalAnual / 12) + '/mes)';
-    charts.divMonthly = new Chart(document.getElementById('divMonthlyChart'), {
-      type: 'bar',
-      data: {
-        labels: MESES.map((mm, i) => mm + (i === nowMonth ? ' ●' : '')),
-        datasets: divDatasets
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: {
-          legend: { position: 'bottom', labels: { color: '#c7c8cd', boxWidth: 12, font: { size: 11 } } },
-          tooltip: {
-            callbacks: {
-              label: ctx => ctx.dataset.label + ': ' + fmtEUR(ctx.parsed.y),
-              footer: items => 'Total mes: ' + fmtEUR(items.reduce((a, i) => a + i.parsed.y, 0))
-            }
-          }
-        },
-        scales: {
-          x: { stacked: true, ticks: { color: '#9a9ca3' }, grid: { color: '#262931' } },
-          y: { stacked: true, beginAtZero: true, ticks: { color: '#9a9ca3', callback: v => v + ' €' }, grid: { color: '#262931' } }
-        }
-      }
-    });
   } else if (tab === 'acciones') {
     destroyChart('stockGp');
     charts.stockGp = new Chart(document.getElementById('stockGpChart'), {
@@ -973,371 +732,7 @@ function renderChartsFor(tab, m) {
         }
       }
     });
-  } else if (tab === 'commodities') {
-    destroyChart('commoGp');
-    charts.commoGp = new Chart(document.getElementById('commoGpChart'), {
-      type: 'bar',
-      data: {
-        labels: m.commodityRows.map(r => r.simbolo),
-        datasets: [{ label: 'G/P %', data: m.commodityRows.map(r => r.gpPct), backgroundColor: m.commodityRows.map(r => r.gpPct >= 0 ? '#4ade80' : '#f87171') }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { ticks: { color: '#9a9ca3' }, grid: { color: '#262931' } },
-          y: { ticks: { color: '#9a9ca3', callback: v => v + '%' }, grid: { color: '#262931' } }
-        }
-      }
-    });
-  } else if (tab === 'robo') {
-    destroyChart('robo');
-    charts.robo = new Chart(document.getElementById('roboChart'), {
-      type: 'line',
-      data: {
-        labels: m.roboSorted.map(h => h.fecha),
-        datasets: [
-          { label: 'Valor cuenta (€)', data: m.roboSorted.map(h => h.valor),
-            borderColor: '#c084fc', backgroundColor: 'rgba(192,132,252,0.12)', fill: true, tension: 0.25 },
-          { label: 'Aportado (€)', data: m.roboSorted.map(h => h.aportado),
-            borderColor: '#9a9ca3', backgroundColor: 'transparent', borderDash: [4, 4], tension: 0 }
-        ]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { position: 'bottom', labels: { color: '#c7c8cd', boxWidth: 12, font: { size: 11 } } } },
-        scales: {
-          x: { ticks: { color: '#9a9ca3' }, grid: { color: '#262931' } },
-          y: { ticks: { color: '#9a9ca3' }, grid: { color: '#262931' } }
-        }
-      }
-    });
-  } else if (tab === 'gastos') {
-    destroyChart('gastosPie');
-    const mes = (data.budget && data.budget[currentMonth]) || { ingresos: [], gastos: [] };
-    const porCategoria = (mes.gastos || [])
-      .map(g => ({ label: g.categoria || g.concepto, total: Array.isArray(g.items) ? sumItems(g) : (parseFloat(g.importe) || 0) }))
-      .filter(g => g.total > 0);
-    charts.gastosPie = new Chart(document.getElementById('gastosPieChart'), {
-      type: 'doughnut',
-      data: {
-        labels: porCategoria.map(g => g.label),
-        datasets: [{
-          data: porCategoria.map(g => g.total),
-          backgroundColor: ['#f87171', '#e0a93a', '#6f80f5', '#5fd99a', '#c084fc', '#f5c542', '#38bdf8', '#fb923c', '#a3e635', '#f472b6']
-        }]
-      },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#c7c8cd', boxWidth: 12, font: { size: 11 } } } } }
-    });
-
-    destroyChart('balance');
-    const year = currentMonth.slice(0, 4);
-    const months = [];
-    for (let mo = 1; mo <= 12; mo++) months.push(`${year}-${String(mo).padStart(2, '0')}`);
-    charts.balance = new Chart(document.getElementById('balanceChart'), {
-      type: 'bar',
-      data: {
-        labels: months.map(formatMonthLabel),
-        datasets: [
-          { label: 'Ingresos', data: months.map(mth => computeBudget(mth).totalIng), backgroundColor: '#4ade80' },
-          { label: 'Gastos', data: months.map(mth => computeBudget(mth).totalGas), backgroundColor: '#f87171' }
-        ]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { position: 'bottom', labels: { color: '#c7c8cd', boxWidth: 12, font: { size: 11 } } } },
-        scales: {
-          x: { ticks: { color: '#9a9ca3' }, grid: { color: '#262931' } },
-          y: { ticks: { color: '#9a9ca3' }, grid: { color: '#262931' } }
-        }
-      }
-    });
   }
-}
-
-function renderRoboTable() {
-  const el = document.getElementById('roboTable');
-  el.querySelector('thead').innerHTML = '<tr><th>Fecha</th><th>Valor cuenta</th><th>Aportado</th><th>G/P</th><th>G/P %</th><th></th></tr>';
-  const sorted = data.robo.map((h, i) => ({ ...h, _idx: i })).sort((a, b) => a.fecha.localeCompare(b.fecha));
-  el.querySelector('tbody').innerHTML = sorted.map(h => {
-    const gpAbs = h.valor - h.aportado;
-    const gpPct = h.aportado ? (gpAbs / h.aportado) * 100 : 0;
-    return `
-    <tr>
-      <td>${h.fecha}</td>
-      <td>${fmtEUR(h.valor)}</td>
-      <td>${fmtEUR(h.aportado)}</td>
-      <td class="${gpClass(gpAbs)}">${fmtEUR(gpAbs)}</td>
-      <td class="${gpClass(gpPct)}">${fmtPct(gpPct)}</td>
-      <td><button class="del-btn" data-idx="${h._idx}">✕</button></td>
-    </tr>`;
-  }).join('');
-  el.querySelectorAll('.del-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
-      if (!confirm('¿Eliminar este punto del robo-advisor? Esta acción no se puede deshacer.')) return;
-      data.robo.splice(+e.target.dataset.idx, 1);
-      save();
-      renderAll();
-    });
-  });
-}
-
-// ===== Ingresos y gastos mensuales (independiente de la cartera) =====
-// data.budget = { 'YYYY-MM': {
-//   ingresos: [{concepto, importe}],
-//   gastos: [{categoria, items: [{concepto, importe, mensual}]}]   <- gastos por categoría
-// } }
-// "mensual" marca los gastos fijos que se repiten cada mes. Al abrir un mes
-// nuevo se copian las categorías del mes anterior más reciente; sus gastos
-// mensuales se copian con su importe (se repiten solos), los puntuales no.
-const sumItems = g => (Array.isArray(g.items) ? g.items : []).reduce((a, it) => a + (parseFloat(it.importe) || 0), 0);
-const sumItemsTipo = (g, mensual) => (Array.isArray(g.items) ? g.items : []).reduce((a, it) => (!!it.mensual === mensual ? a + (parseFloat(it.importe) || 0) : a), 0);
-
-// Convierte gastos del formato plano antiguo [{concepto, importe}] al nuevo
-// formato con categorías, sin perder los importes ya anotados.
-function migrateBudgetGastos() {
-  let changed = false;
-  Object.values(data.budget || {}).forEach(mes => {
-    if (!Array.isArray(mes.gastos) || !mes.gastos.some(g => !Array.isArray(g.items))) return;
-    mes.gastos = mes.gastos.map(g => {
-      if (Array.isArray(g.items)) return g;
-      const imp = parseFloat(g.importe) || 0;
-      return { categoria: g.concepto || g.categoria || 'Otros', items: imp !== 0 ? [{ concepto: 'General', importe: imp }] : [] };
-    });
-    changed = true;
-  });
-  if (changed) save();
-}
-
-const BUDGET_DEFAULTS = {
-  ingresos: ['Nómina', 'Dividendos'],
-  gastos: ['Gasolina', 'Servicios', 'Comida', 'Entretenimiento']
-};
-let currentMonth = new Date().toISOString().slice(0, 7);
-
-function ensureMonth(month) {
-  if (!data.budget || typeof data.budget !== 'object' || Array.isArray(data.budget)) data.budget = {};
-  if (!data.budget[month]) {
-    const prevKeys = Object.keys(data.budget).filter(k => k < month).sort();
-    const src = prevKeys.length ? data.budget[prevKeys[prevKeys.length - 1]] : null;
-    data.budget[month] = {
-      ingresos: (src ? src.ingresos.map(r => r.concepto) : BUDGET_DEFAULTS.ingresos).map(c => ({ concepto: c, importe: 0 })),
-      gastos: src
-        ? src.gastos.map(g => ({
-            categoria: g.categoria,
-            items: (g.items || []).filter(it => it.mensual).map(it => ({ concepto: it.concepto, importe: parseFloat(it.importe) || 0, mensual: true }))
-          }))
-        : BUDGET_DEFAULTS.gastos.map(c => ({ categoria: c, items: [] }))
-    };
-    save();
-  }
-  return data.budget[month];
-}
-
-function computeBudget(month) {
-  const mes = (data.budget && data.budget[month]) || { ingresos: [], gastos: [] };
-  const totalIng = (mes.ingresos || []).reduce((a, r) => a + (parseFloat(r.importe) || 0), 0);
-  const totalGas = (mes.gastos || []).reduce((a, g) => a + (Array.isArray(g.items) ? sumItems(g) : (parseFloat(g.importe) || 0)), 0);
-  const totalFijo = (mes.gastos || []).reduce((a, g) => a + sumItemsTipo(g, true), 0);
-  const totalVar = totalGas - totalFijo;
-  const balance = totalIng - totalGas;
-  const tasaAhorro = totalIng ? (balance / totalIng) * 100 : 0;
-  return { totalIng, totalGas, totalFijo, totalVar, balance, tasaAhorro };
-}
-
-function renderBudgetStats() {
-  const b = computeBudget(currentMonth);
-  document.getElementById('topStatsGastos').innerHTML =
-    statCard('Ingresos — ' + formatMonthLabel(currentMonth), fmtEUR(b.totalIng), 'pos') +
-    statCard('Gastos — ' + formatMonthLabel(currentMonth), fmtEUR(b.totalGas), b.totalGas > 0 ? 'neg' : '') +
-    statCard('Fijos (mensuales)', fmtEUR(b.totalFijo), b.totalFijo > 0 ? 'neg' : '') +
-    statCard('Puntuales', fmtEUR(b.totalVar), b.totalVar > 0 ? 'neg' : '') +
-    statCard('Balance del mes', fmtEUR(b.balance), gpClass(b.balance)) +
-    statCard('Tasa de ahorro', fmtPct(b.tasaAhorro), gpClass(b.balance));
-}
-
-const BUDGET_SPIN = '<span class="spin-btns"><button type="button" class="spin-btn spin-up" tabindex="-1">▲</button><button type="button" class="spin-btn spin-down" tabindex="-1">▼</button></span>';
-
-function renderIncomeTable() {
-  const el = document.getElementById('incomeTable');
-  const mes = ensureMonth(currentMonth);
-  el.querySelector('thead').innerHTML = '<tr><th>Concepto</th><th>Importe</th><th></th></tr>';
-  const rows = mes.ingresos.map((r, i) => `
-    <tr data-idx="${i}">
-      <td><input class="cell-input name" data-field="concepto" value="${r.concepto}" style="width:170px"></td>
-      <td><span class="num-spin"><input class="cell-input" data-field="importe" type="number" step="0.01" value="${r.importe}" style="width:96px">${BUDGET_SPIN}</span></td>
-      <td><button class="del-btn" data-idx="${i}">✕</button></td>
-    </tr>`).join('');
-  const total = mes.ingresos.reduce((a, r) => a + (parseFloat(r.importe) || 0), 0);
-  const totalRow = `<tr><td style="font-weight:600">Total</td><td class="pos" id="incomeTable-total" style="font-weight:600">${fmtEUR(total)}</td><td></td></tr>`;
-  const addRow = `<tr class="add-row"><td colspan="3"><button class="btn small" data-add="ingresos">+ Añadir ingreso</button></td></tr>`;
-  el.querySelector('tbody').innerHTML = rows + totalRow + addRow;
-
-  el.querySelectorAll('input.cell-input').forEach(inp => {
-    inp.addEventListener('input', e => {
-      const idx = +e.target.closest('tr').dataset.idx;
-      const field = e.target.dataset.field;
-      let val = e.target.value;
-      if (field === 'importe') { val = parseFloat(val); if (isNaN(val)) val = 0; }
-      mes.ingresos[idx][field] = val;
-      save();
-      refreshBudgetDerived();
-    });
-    inp.addEventListener('blur', () => renderAll());
-  });
-  el.querySelectorAll('.del-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
-      const idx = +e.target.dataset.idx;
-      const row = mes.ingresos[idx];
-      if (!confirm(`¿Eliminar "${row ? row.concepto : 'este concepto'}"? Esta acción no se puede deshacer.`)) return;
-      mes.ingresos.splice(idx, 1);
-      save();
-      renderAll();
-    });
-  });
-  el.querySelector('[data-add]').addEventListener('click', () => {
-    mes.ingresos.push({ concepto: 'Nuevo ingreso', importe: 0 });
-    save();
-    renderAll();
-  });
-}
-
-// Gastos anidados: cada categoría (Gasolina, Entretenimiento...) tiene sus
-// propios conceptos con importe. Se pintan DOS tablas con las mismas
-// categorías: una solo con los conceptos mensuales (fijos) y otra con los
-// puntuales. La casilla "M" de cada concepto lo mueve de una tabla a la otra.
-function renderExpenseTable(tableId, mensual) {
-  const el = document.getElementById(tableId);
-  const mes = ensureMonth(currentMonth);
-  const key = mensual ? 'fijo' : 'var';
-  el.querySelector('thead').innerHTML = '<tr><th>Categoría / concepto</th><th>Importe</th><th title="Marcado = gasto mensual (se copia al mes siguiente)">M</th><th></th></tr>';
-
-  const rows = mes.gastos.map((g, ci) => {
-    const catRow = `
-    <tr class="cat-row">
-      <td><input class="cell-input name cat-input" data-cat="${ci}" value="${g.categoria}" style="width:156px;font-weight:600"></td>
-      <td id="catTotal-${key}-${ci}" style="font-weight:600">${fmtEUR(sumItemsTipo(g, mensual))}</td>
-      <td></td>
-      <td><button class="del-btn" data-del-cat="${ci}" title="Eliminar categoría entera (mensuales y puntuales)">✕</button></td>
-    </tr>`;
-    const itemRows = (g.items || []).map((it, ii) => ({ it, ii }))
-      .filter(x => !!x.it.mensual === mensual)
-      .map(({ it, ii }) => `
-    <tr class="item-row">
-      <td><input class="cell-input name" data-cat="${ci}" data-item="${ii}" data-field="concepto" value="${it.concepto}" style="width:132px"></td>
-      <td><span class="num-spin"><input class="cell-input" data-cat="${ci}" data-item="${ii}" data-field="importe" type="number" step="0.01" value="${it.importe}" style="width:96px">${BUDGET_SPIN}</span></td>
-      <td><input type="checkbox" class="mensual-check" data-cat="${ci}" data-item="${ii}"${it.mensual ? ' checked' : ''} title="Gasto mensual: se copia automáticamente al mes siguiente"></td>
-      <td><button class="del-btn" data-del-item="${ci}-${ii}">✕</button></td>
-    </tr>`).join('');
-    const addItemRow = `
-    <tr class="add-row item-row">
-      <td colspan="4"><button class="btn small" data-add-item="${ci}">+ Añadir a ${g.categoria}</button></td>
-    </tr>`;
-    return catRow + itemRows + addItemRow;
-  }).join('');
-
-  const total = mes.gastos.reduce((a, g) => a + sumItemsTipo(g, mensual), 0);
-  const totalRow = `<tr><td style="font-weight:600">${mensual ? 'Total mensuales' : 'Total puntuales'}</td><td class="${total > 0 ? 'neg' : ''}" id="${tableId}-total" style="font-weight:600">${fmtEUR(total)}</td><td></td><td></td></tr>`;
-  const addCatRow = `<tr class="add-row"><td colspan="4"><button class="btn small" data-add-cat="1">+ Añadir categoría</button></td></tr>`;
-  el.querySelector('tbody').innerHTML = rows + totalRow + addCatRow;
-
-  el.querySelectorAll('input.cat-input').forEach(inp => {
-    inp.addEventListener('input', e => {
-      mes.gastos[+e.target.dataset.cat].categoria = e.target.value;
-      save();
-    });
-    inp.addEventListener('blur', () => renderAll());
-  });
-  el.querySelectorAll('input.cell-input:not(.cat-input)').forEach(inp => {
-    inp.addEventListener('input', e => {
-      const ci = +e.target.dataset.cat, ii = +e.target.dataset.item;
-      const field = e.target.dataset.field;
-      let val = e.target.value;
-      if (field === 'importe') { val = parseFloat(val); if (isNaN(val)) val = 0; }
-      mes.gastos[ci].items[ii][field] = val;
-      save();
-      refreshBudgetDerived();
-    });
-    inp.addEventListener('blur', () => renderAll());
-  });
-  el.querySelectorAll('.mensual-check').forEach(chk => {
-    chk.addEventListener('change', e => {
-      const ci = +e.target.dataset.cat, ii = +e.target.dataset.item;
-      mes.gastos[ci].items[ii].mensual = e.target.checked;
-      save();
-      renderAll(); // el concepto se mueve a la otra tabla
-    });
-  });
-  el.querySelectorAll('[data-del-cat]').forEach(btn => {
-    btn.addEventListener('click', e => {
-      const ci = +e.target.dataset.delCat;
-      const g = mes.gastos[ci];
-      if (!confirm(`¿Eliminar la categoría "${g ? g.categoria : ''}" con todos sus conceptos (mensuales y puntuales)? Esta acción no se puede deshacer.`)) return;
-      mes.gastos.splice(ci, 1);
-      save();
-      renderAll();
-    });
-  });
-  el.querySelectorAll('[data-del-item]').forEach(btn => {
-    btn.addEventListener('click', e => {
-      const [ci, ii] = e.target.dataset.delItem.split('-').map(Number);
-      mes.gastos[ci].items.splice(ii, 1);
-      save();
-      renderAll();
-    });
-  });
-  el.querySelectorAll('[data-add-item]').forEach(btn => {
-    btn.addEventListener('click', e => {
-      mes.gastos[+e.target.dataset.addItem].items.push({ concepto: 'Nuevo concepto', importe: 0, mensual });
-      save();
-      renderAll();
-    });
-  });
-  el.querySelector('[data-add-cat]').addEventListener('click', () => {
-    mes.gastos.push({ categoria: 'Nueva categoría', items: [] });
-    save();
-    renderAll();
-  });
-}
-
-// Mientras se teclea un importe solo se actualizan tarjetas y totales,
-// sin reconstruir la tabla (misma técnica que en las tablas de activos).
-function refreshBudgetDerived() {
-  renderBudgetStats();
-  const b = data.budget[currentMonth];
-  if (!b) return;
-  const totalIng = (b.ingresos || []).reduce((a, r) => a + (parseFloat(r.importe) || 0), 0);
-  const ingCell = document.getElementById('incomeTable-total');
-  if (ingCell) ingCell.textContent = fmtEUR(totalIng);
-  let totFijo = 0, totVar = 0;
-  (b.gastos || []).forEach((g, ci) => {
-    const f = sumItemsTipo(g, true), v = sumItemsTipo(g, false);
-    totFijo += f; totVar += v;
-    const cf = document.getElementById('catTotal-fijo-' + ci);
-    if (cf) cf.textContent = fmtEUR(f);
-    const cv = document.getElementById('catTotal-var-' + ci);
-    if (cv) cv.textContent = fmtEUR(v);
-  });
-  const tf = document.getElementById('expenseTableFijo-total');
-  if (tf) { tf.textContent = fmtEUR(totFijo); tf.className = totFijo > 0 ? 'neg' : ''; }
-  const tv = document.getElementById('expenseTableVar-total');
-  if (tv) { tv.textContent = fmtEUR(totVar); tv.className = totVar > 0 ? 'neg' : ''; }
-}
-
-function renderBudgetAll() {
-  const mesEl = document.getElementById('mesInput');
-  if (mesEl && document.activeElement !== mesEl) mesEl.value = currentMonth;
-  renderBudgetStats();
-  renderIncomeTable();
-  renderExpenseTable('expenseTableFijo', true);
-  renderExpenseTable('expenseTableVar', false);
-}
-
-function shiftMonth(delta) {
-  const [y, mo] = currentMonth.split('-').map(Number);
-  const d = new Date(y, mo - 1 + delta, 1);
-  currentMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  renderAll();
 }
 
 // Mientras se está escribiendo en una celda NO reconstruimos la tabla entera
@@ -1347,16 +742,8 @@ function shiftMonth(delta) {
 // tabla completa y las gráficas se vuelven a dibujar del todo (renderAll)
 // solo cuando el campo pierde el foco (blur), que es cuando ya hemos
 // terminado de escribir ese valor.
-const GROUP_TABLE_ID = { etfsDiv: 'etfDivTable', etfsAcc: 'etfAccTable', stocks: 'stocksTable', commodities: 'commoditiesTable' };
-const GROUP_CURRENCY = { etfsDiv: 'EUR', etfsAcc: 'EUR', stocks: 'USD', commodities: 'EUR' };
-// Índices de columna <td> de los valores calculados, distintos para etfsDiv
-// porque esa tabla tiene dos columnas extra (Div/ud anual y Div. anual).
-const GROUP_COLS = {
-  etfsDiv: { totalInv: 6, valorAct: 7, divAnual: 8, gpAbs: 9, gpPct: 10 },
-  etfsAcc: { totalInv: 5, valorAct: 6, gpAbs: 7, gpPct: 8 },
-  stocks: { totalInv: 5, valorAct: 6, gpAbs: 7, gpPct: 8 },
-  commodities: { totalInv: 5, valorAct: 6, gpAbs: 7, gpPct: 8 }
-};
+const GROUP_TABLE_ID = { etfsDiv: 'etfDivTable', etfsAcc: 'etfAccTable', stocks: 'stocksTable' };
+const GROUP_CURRENCY = { etfsDiv: 'EUR', etfsAcc: 'EUR', stocks: 'USD' };
 
 function refreshDerivedRow(group, idx) {
   const tableId = GROUP_TABLE_ID[group];
@@ -1365,14 +752,12 @@ function refreshDerivedRow(group, idx) {
   const c = computed(data[group][idx]);
   const fmt = GROUP_CURRENCY[group] === 'USD' ? fmtUSD : fmtEUR;
   const tds = row.querySelectorAll('td');
-  const cols = GROUP_COLS[group];
-  tds[cols.totalInv].textContent = fmt(c.totalInv);
-  tds[cols.valorAct].textContent = fmt(c.valorAct);
-  if (cols.divAnual !== undefined) tds[cols.divAnual].textContent = fmt(c.divAnual);
-  tds[cols.gpAbs].textContent = fmt(c.gpAbs);
-  tds[cols.gpAbs].className = gpClass(c.gpAbs);
-  tds[cols.gpPct].textContent = fmtPct(c.gpPct);
-  tds[cols.gpPct].className = gpClass(c.gpPct);
+  tds[5].textContent = fmt(c.totalInv);
+  tds[6].textContent = fmt(c.valorAct);
+  tds[7].textContent = fmt(c.gpAbs);
+  tds[7].className = gpClass(c.gpAbs);
+  tds[8].textContent = fmtPct(c.gpPct);
+  tds[8].className = gpClass(c.gpPct);
 }
 
 function refreshDerivedAll() {
@@ -1380,25 +765,194 @@ function refreshDerivedAll() {
   if (document.activeElement !== fxEl) fxEl.value = data.fx; // no pisar lo que se está tecleando
   const m = computeAll();
   renderStats(m);
-  ['etfsDiv', 'etfsAcc', 'stocks', 'commodities'].forEach(group => {
+  ['etfsDiv', 'etfsAcc', 'stocks'].forEach(group => {
     data[group].forEach((_, idx) => refreshDerivedRow(group, idx));
   });
 }
+
+// ─── SIMULACIÓN ──────────────────────────────────────────────────────────────
+let currentSimId = null;
+
+function simById(id) { return (data.simulations || []).find(s => s.id === id) || null; }
+
+function newSimulation() {
+  const today = new Date().toISOString().slice(0, 10);
+  const sim = {
+    id: Date.now(),
+    nombre: 'Simulación ' + today,
+    fecha: today,
+    objetivo: 3000,
+    aportacion: 200,
+    etfsDiv: data.etfsDiv.map(r => ({
+      activo: r.activo, simbolo: r.simbolo,
+      cantidad: r.cantidad, precioCompra: r.precioCompra,
+      precioFuturo: r.precioActual, dividendoUd: r.dividendoUd || 0
+    })),
+    etfsAcc: data.etfsAcc.map(r => ({
+      activo: r.activo, simbolo: r.simbolo,
+      cantidad: r.cantidad, precioCompra: r.precioCompra,
+      precioFuturo: r.precioActual
+    }))
+  };
+  if (!data.simulations) data.simulations = [];
+  data.simulations.push(sim);
+  currentSimId = sim.id;
+  save();
+  renderSimulacion();
+}
+
+function renderSimSelect() {
+  const sel = document.getElementById('simSelect');
+  if (!sel) return;
+  sel.innerHTML = (data.simulations || []).length === 0
+    ? '<option value="">Sin simulaciones</option>'
+    : (data.simulations || []).map(s =>
+        `<option value="${s.id}" ${s.id === currentSimId ? 'selected' : ''}>${s.nombre}</option>`
+      ).join('');
+}
+
+function renderSimTable(elId, rows, isDiv) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const hdiv = isDiv
+    ? '<tr><th>Activo</th><th>Símbolo</th><th>Cantidad</th><th>P. compra</th><th>P. futuro</th><th>Div/ud (€/año)</th><th>Valor sim.</th><th>G/P</th><th>G/P%</th><th>Div mensual</th></tr>'
+    : '<tr><th>Activo</th><th>Símbolo</th><th>Cantidad</th><th>P. compra</th><th>P. futuro</th><th>Valor sim.</th><th>G/P</th><th>G/P%</th></tr>';
+  el.querySelector('thead').innerHTML = hdiv;
+  const simId = currentSimId;
+  el.querySelector('tbody').innerHTML = rows.map((r, i) => {
+    const valorSim = r.cantidad * r.precioFuturo;
+    const totalInv = r.cantidad * r.precioCompra;
+    const gpAbs = valorSim - totalInv;
+    const gpPct = totalInv ? (gpAbs / totalInv) * 100 : 0;
+    const divMes = isDiv ? (r.cantidad * (r.dividendoUd || 0)) / 12 : null;
+    const key = isDiv ? 'etfsDiv' : 'etfsAcc';
+    return `<tr data-idx="${i}">
+      <td>${r.activo}</td>
+      <td>${r.simbolo}</td>
+      <td><input class="sim-input-sm" data-sim="${simId}" data-key="${key}" data-idx="${i}" data-field="cantidad" type="number" step="0.01" value="${r.cantidad}"></td>
+      <td style="color:#9a9ca3">${fmtEUR(r.precioCompra)}</td>
+      <td><input class="sim-input-sm" data-sim="${simId}" data-key="${key}" data-idx="${i}" data-field="precioFuturo" type="number" step="0.01" value="${r.precioFuturo}"></td>
+      ${isDiv ? `<td><input class="sim-input-sm" data-sim="${simId}" data-key="${key}" data-idx="${i}" data-field="dividendoUd" type="number" step="0.01" value="${r.dividendoUd || 0}"></td>` : ''}
+      <td>${fmtEUR(valorSim)}</td>
+      <td class="${gpClass(gpAbs)}">${fmtEUR(gpAbs)}</td>
+      <td class="${gpClass(gpPct)}">${fmtPct(gpPct)}</td>
+      ${isDiv ? `<td class="pos">${fmtEUR(divMes)}</td>` : ''}
+    </tr>`;
+  }).join('');
+
+  el.querySelectorAll('input.sim-input-sm').forEach(inp => {
+    inp.addEventListener('input', e => {
+      const { sim, key, idx, field } = e.target.dataset;
+      const s = simById(+sim);
+      if (!s) return;
+      let val = parseFloat(e.target.value);
+      if (isNaN(val)) val = 0;
+      s[key][+idx][field] = val;
+      save();
+      renderSimStats(s);
+    });
+  });
+}
+
+function renderSimStats(sim) {
+  const divMesTotal = (sim.etfsDiv || []).reduce((a, r) => a + (r.cantidad * (r.dividendoUd || 0)) / 12, 0);
+  const valorDiv = (sim.etfsDiv || []).reduce((a, r) => a + r.cantidad * r.precioFuturo, 0);
+  const valorAcc = (sim.etfsAcc || []).reduce((a, r) => a + r.cantidad * r.precioFuturo, 0);
+  const totalSim = valorDiv + valorAcc;
+  const totalInv = [...(sim.etfsDiv || []), ...(sim.etfsAcc || [])].reduce((a, r) => a + r.cantidad * r.precioCompra, 0);
+  const gpTotal = totalSim - totalInv;
+  const objetivo = sim.objetivo || 3000;
+  const aportacion = sim.aportacion || 0;
+  const deficit = objetivo - divMesTotal;
+  // Capital adicional necesario basado en yield actual de ETFs div
+  const yieldAnual = divMesTotal > 0 && valorDiv > 0 ? (divMesTotal * 12) / valorDiv : 0;
+  let anosStr = '—';
+  if (deficit > 0 && aportacion > 0 && yieldAnual > 0) {
+    // Capital total necesario
+    const capitalNecesario = (objetivo * 12) / yieldAnual;
+    const gapCapital = Math.max(0, capitalNecesario - totalSim);
+    // Años = capital_gap / (aportacion_mensual × 12) [lineal, sin reinversión]
+    const anos = gapCapital / (aportacion * 12);
+    anosStr = anos < 0.1 ? '< 1 mes' : anos.toFixed(1) + ' años';
+  } else if (deficit <= 0) {
+    anosStr = '✅ Objetivo alcanzado';
+  }
+
+  const el = document.getElementById('topStatsSim');
+  if (!el) return;
+  el.innerHTML =
+    statCard('Valor total simulado', fmtEUR(totalSim)) +
+    statCard('G/P total', fmtEUR(gpTotal) + ' (' + fmtPct(totalInv ? gpTotal/totalInv*100 : 0) + ')', gpClass(gpTotal)) +
+    statCard('Dividendo mensual', fmtEUR(divMesTotal), divMesTotal >= objetivo ? 'pos' : '') +
+    statCard('Déficit para objetivo', deficit > 0 ? fmtEUR(deficit) + '/mes' : '✅ Superávit ' + fmtEUR(-deficit), gpClass(-deficit)) +
+    statCard('Años para objetivo', anosStr);
+}
+
+function renderSimulacion() {
+  renderSimSelect();
+  const sim = simById(currentSimId);
+  if (!sim) {
+    document.getElementById('topStatsSim').innerHTML = '<div style="color:#9a9ca3;font-size:13px;">Crea una simulación con "+ Nueva simulación"</div>';
+    document.getElementById('simDivTable').querySelector('thead').innerHTML = '';
+    document.getElementById('simDivTable').querySelector('tbody').innerHTML = '';
+    document.getElementById('simAccTable').querySelector('thead').innerHTML = '';
+    document.getElementById('simAccTable').querySelector('tbody').innerHTML = '';
+    document.getElementById('simName').value = '';
+    return;
+  }
+  document.getElementById('simName').value = sim.nombre;
+  document.getElementById('simObjetivo').value = sim.objetivo || 3000;
+  document.getElementById('simAportacion').value = sim.aportacion || 200;
+  renderSimTable('simDivTable', sim.etfsDiv || [], true);
+  renderSimTable('simAccTable', sim.etfsAcc || [], false);
+  renderSimStats(sim);
+}
+
+// Listeners de la pestaña simulación (se registran una vez)
+document.getElementById('simNewBtn').addEventListener('click', newSimulation);
+document.getElementById('simSaveBtn').addEventListener('click', () => {
+  const sim = simById(currentSimId);
+  if (!sim) return;
+  sim.nombre = document.getElementById('simName').value || sim.nombre;
+  sim.objetivo = parseFloat(document.getElementById('simObjetivo').value) || 3000;
+  sim.aportacion = parseFloat(document.getElementById('simAportacion').value) || 0;
+  save();
+  renderSimulacion();
+});
+document.getElementById('simDelBtn').addEventListener('click', () => {
+  if (!currentSimId) return;
+  if (!confirm('¿Eliminar esta simulación?')) return;
+  data.simulations = (data.simulations || []).filter(s => s.id !== currentSimId);
+  currentSimId = data.simulations.length > 0 ? data.simulations[data.simulations.length - 1].id : null;
+  save();
+  renderSimulacion();
+});
+document.getElementById('simSelect').addEventListener('change', e => {
+  currentSimId = +e.target.value || null;
+  renderSimulacion();
+});
+document.getElementById('simObjetivo').addEventListener('input', () => {
+  const sim = simById(currentSimId);
+  if (sim) { sim.objetivo = parseFloat(document.getElementById('simObjetivo').value) || 3000; renderSimStats(sim); }
+});
+document.getElementById('simAportacion').addEventListener('input', () => {
+  const sim = simById(currentSimId);
+  if (sim) { sim.aportacion = parseFloat(document.getElementById('simAportacion').value) || 0; renderSimStats(sim); }
+});
+// ─────────────────────────────────────────────────────────────────────────────
 
 function renderAll() {
   document.getElementById('fxInput').value = data.fx;
   const m = computeAll();
 
   renderStats(m);
-  renderAssetTable('etfDivTable', 'etfsDiv', 'EUR', { showDividend: true });
+  renderAssetTable('etfDivTable', 'etfsDiv', 'EUR');
   renderAssetTable('etfAccTable', 'etfsAcc', 'EUR');
   renderAssetTable('stocksTable', 'stocks', 'USD');
-  renderAssetTable('commoditiesTable', 'commodities', 'EUR');
   renderHistoryTable();
-  renderRoboTable();
-  renderBudgetAll();
 
   renderChartsFor(currentTab, m);
+  if (currentTab === 'simulacion') renderSimulacion();
 }
 
 function switchTab(tab) {
@@ -1437,24 +991,6 @@ document.getElementById('histAddBtn').addEventListener('click', () => {
   document.getElementById('histVal').value = '';
   renderAll();
 });
-document.getElementById('roboAddBtn').addEventListener('click', () => {
-  const fecha = document.getElementById('roboDate').value;
-  const valor = parseFloat(document.getElementById('roboVal').value);
-  const aportado = parseFloat(document.getElementById('roboAportado').value);
-  if (!fecha || isNaN(valor) || isNaN(aportado)) return;
-  const existing = data.robo.find(h => h.fecha === fecha);
-  if (existing) {
-    existing.valor = valor;
-    existing.aportado = aportado;
-  } else {
-    data.robo.push({ fecha, valor, aportado });
-  }
-  save();
-  document.getElementById('roboDate').value = '';
-  document.getElementById('roboVal').value = '';
-  document.getElementById('roboAportado').value = '';
-  renderAll();
-});
 document.getElementById('histSaveCurrentBtn').addEventListener('click', () => {
   const statusEl = document.getElementById('histSaveStatus');
   const m = computeAll();
@@ -1471,28 +1007,6 @@ document.getElementById('histSaveCurrentBtn').addEventListener('click', () => {
   save();
   renderAll();
   setTimeout(() => { statusEl.textContent = ''; }, 10000);
-});
-document.getElementById('mesPrev').addEventListener('click', () => shiftMonth(-1));
-document.getElementById('mesNext').addEventListener('click', () => shiftMonth(1));
-document.getElementById('mesInput').addEventListener('change', e => {
-  if (/^\d{4}-\d{2}$/.test(e.target.value)) {
-    currentMonth = e.target.value;
-    renderAll();
-  }
-});
-// Copia a la fila "Dividendos" del mes el ingreso pasivo mensual estimado
-// que ya calcula la pestaña de ETFs (dividendo anual / 12).
-document.getElementById('divFillBtn').addEventListener('click', () => {
-  const m = computeAll();
-  const mes = ensureMonth(currentMonth);
-  const imp = Math.round(m.ingresoMensualDiv * 100) / 100;
-  const row = mes.ingresos.find(r => (r.concepto || '').toLowerCase().startsWith('dividendo'));
-  if (row) row.importe = imp; else mes.ingresos.push({ concepto: 'Dividendos', importe: imp });
-  save();
-  renderAll();
-  const st = document.getElementById('divFillStatus');
-  st.textContent = `✅ Dividendos estimados del mes: ${fmtEUR(imp)} (según los ETFs de la cartera).`;
-  setTimeout(() => { st.textContent = ''; }, 10000);
 });
 
 function waitForCowork(timeoutMs) {
@@ -1517,33 +1031,11 @@ function buildBackupCSV(m) {
   m.etfDivRows.forEach(r => rows.push([r.activo, r.simbolo, 'ETF Dividendo', r.cantidad, r.precioCompra, r.precioActual, r.totalInv.toFixed(2), r.valorAct.toFixed(2), r.gpAbs.toFixed(2), r.gpPct.toFixed(2)]));
   m.etfAccRows.forEach(r => rows.push([r.activo, r.simbolo, 'ETF Acumulación', r.cantidad, r.precioCompra, r.precioActual, r.totalInv.toFixed(2), r.valorAct.toFixed(2), r.gpAbs.toFixed(2), r.gpPct.toFixed(2)]));
   m.stockRows.forEach(r => rows.push([r.activo, r.simbolo, 'Acción USD', r.cantidad, r.precioCompra, r.precioActual, r.totalInv.toFixed(2), r.valorAct.toFixed(2), r.gpAbs.toFixed(2), r.gpPct.toFixed(2)]));
-  m.commodityRows.forEach(r => rows.push([r.activo, r.simbolo, 'Commodity', r.cantidad, r.precioCompra, r.precioActual, r.totalInv.toFixed(2), r.valorAct.toFixed(2), r.gpAbs.toFixed(2), r.gpPct.toFixed(2)]));
   rows.push([]);
   rows.push(['Tipo de Cambio USD a EUR', data.fx]);
   rows.push([]);
   rows.push(['Fecha', 'Ganancia/Pérdida Total EUR']);
   [...data.history].sort((a, b) => a.fecha.localeCompare(b.fecha)).forEach(h => rows.push([h.fecha, h.va]));
-  rows.push([]);
-  rows.push(['Robo-advisor — Fecha', 'Valor cuenta', 'Aportado', 'GP']);
-  m.roboSorted.forEach(h => rows.push([h.fecha, h.valor.toFixed(2), h.aportado.toFixed(2), (h.valor - h.aportado).toFixed(2)]));
-  rows.push([]);
-  rows.push(['Ingresos y gastos mensuales']);
-  Object.keys(data.budget || {}).sort().forEach(month => {
-    const b = data.budget[month];
-    const bc = computeBudget(month);
-    rows.push([`${month} — Ingresos (total ${bc.totalIng.toFixed(2)})`]);
-    (b.ingresos || []).forEach(r => rows.push([r.concepto, r.importe]));
-    rows.push([`${month} — Gastos (total ${bc.totalGas.toFixed(2)})`]);
-    (b.gastos || []).forEach(g => {
-      if (Array.isArray(g.items)) {
-        rows.push([g.categoria, '', sumItems(g).toFixed(2)]);
-        g.items.forEach(it => rows.push(['', it.concepto, it.importe, it.mensual ? 'Mensual' : 'Puntual']));
-      } else {
-        rows.push([g.concepto, '', g.importe]);
-      }
-    });
-    rows.push([`${month} — Balance`, bc.balance.toFixed(2)]);
-  });
   return rows.map(r => r.map(csvEscape).join(',')).join('\n');
 }
 
@@ -1571,26 +1063,6 @@ document.getElementById('backupBtn').addEventListener('click', async () => {
   }
 });
 
-// La key embebida (FMP_API_KEY) queda visible si compartes el archivo. Para
-// no depender de eso, cada usuario puede guardar su propia key en este
-// navegador (localStorage); si existe, se usa en lugar de la del archivo.
-function getApiKey() {
-  return localStorage.getItem('cartera_fmp_key_override') || FMP_API_KEY;
-}
-
-document.getElementById('apiKeyBtn').addEventListener('click', () => {
-  const current = localStorage.getItem('cartera_fmp_key_override');
-  const val = prompt('Introduce tu propia API key de Financial Modeling Prep.\nDéjalo en blanco para volver a usar la key incluida por defecto en el archivo.', current || '');
-  if (val === null) return;
-  if (val.trim() === '') {
-    localStorage.removeItem('cartera_fmp_key_override');
-    alert('Se usará la API key por defecto del archivo.');
-  } else {
-    localStorage.setItem('cartera_fmp_key_override', val.trim());
-    alert('Guardada. A partir de ahora se usará tu propia API key en este navegador.');
-  }
-});
-
 async function getQuotes(symbols) {
   // 1) Si estamos dentro de Cowork, usar el conector (no requiere exponer la key).
   try {
@@ -1611,7 +1083,7 @@ async function getQuotes(symbols) {
   // claves del plan gratuito; en ese caso se prueba /profile, que también
   // incluye el precio actual aunque no esté pensado como endpoint de cotización.
   const results = await Promise.all(symbols.map(async sym => {
-    const quoteUrl = `https://financialmodelingprep.com/stable/quote?symbol=${encodeURIComponent(sym)}&apikey=${getApiKey()}`;
+    const quoteUrl = `https://financialmodelingprep.com/stable/quote?symbol=${encodeURIComponent(sym)}&apikey=${FMP_API_KEY}`;
     try {
       const resp = await fetch(quoteUrl);
       if (resp.ok) {
@@ -1620,7 +1092,7 @@ async function getQuotes(symbols) {
       }
     } catch (e) { /* probamos el fallback de abajo */ }
 
-    const profileUrl = `https://financialmodelingprep.com/stable/profile?symbol=${encodeURIComponent(sym)}&apikey=${getApiKey()}`;
+    const profileUrl = `https://financialmodelingprep.com/stable/profile?symbol=${encodeURIComponent(sym)}&apikey=${FMP_API_KEY}`;
     try {
       const resp = await fetch(profileUrl);
       if (!resp.ok) return null;
@@ -1668,18 +1140,9 @@ document.getElementById('priceBtn').addEventListener('click', async () => {
     }
 
     const symbols = [...new Set(targets.map(t => t.fmpSym))];
-    symbols.push('EURUSD'); // también el tipo de cambio, en la misma consulta
     const quotes = await getQuotes(symbols);
     const priceBySymbol = {};
     quotes.forEach(q => { priceBySymbol[q.symbol] = q.price; });
-
-    // FX automático: FMP cotiza EURUSD (USD por 1 EUR); USD→EUR es la inversa.
-    let fxTxt = '';
-    const eurusd = priceBySymbol['EURUSD'];
-    if (typeof eurusd === 'number' && eurusd > 0) {
-      data.fx = +(1 / eurusd).toFixed(4);
-      fxTxt = ` · FX USD→EUR: ${data.fx}`;
-    }
 
     let updated = 0;
     const results = [];
@@ -1695,23 +1158,10 @@ document.getElementById('priceBtn').addEventListener('click', async () => {
     });
 
     const skipped = ['etfsDiv', 'etfsAcc', 'stocks'].reduce((n, g) => n + data[g].length, 0) - targets.length;
-
-    // Snapshot automático: con los precios (y FX) recién actualizados se
-    // guarda o actualiza el punto de G/P total de hoy en el histórico.
-    let snapTxt = '';
-    if (updated > 0) {
-      const mNow = computeAll();
-      const hoy = new Date().toISOString().slice(0, 10);
-      const gpHoy = Math.round(mNow.totalGPEUR * 100) / 100;
-      const ex = data.history.find(h => h.fecha === hoy);
-      if (ex) ex.va = gpHoy; else data.history.push({ fecha: hoy, va: gpHoy });
-      snapTxt = ` · G/P de hoy guardada (${fmtEUR(gpHoy)})`;
-    }
-
     save();
     renderAll();
     showRowStatuses(results);
-    statusEl.textContent = `✅ ${updated} precio(s) actualizado(s)` + fxTxt + snapTxt + (skipped > 0 ? ` · ${skipped} sin ticker reconocido (edítalos a mano)` : '') + '.';
+    statusEl.textContent = `✅ ${updated} precio(s) actualizado(s)` + (skipped > 0 ? ` · ${skipped} sin ticker reconocido (edítalos a mano)` : '') + '.';
   } catch (e) {
     statusEl.textContent = '❌ No se pudieron actualizar los precios: ' + e.message;
     // Si falló antes de saber qué precios llegaron, marcamos todos los intentados como error.
