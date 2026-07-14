@@ -171,6 +171,7 @@
     <button class="tab-btn" data-tab="acciones">Acciones (equity)</button>
     <button class="tab-btn" data-tab="simulacion">🔮 Simulación</button>
     <button class="tab-btn" data-tab="materias">🥇 Materias primas</button>
+    <button class="tab-btn" data-tab="robo">🤖 Robo Advisor</button>
   </div>
 
   <!-- ===== RESUMEN ===== -->
@@ -189,6 +190,7 @@
           <div class="hist-row">
             <input type="date" id="histDate">
             <span class="num-spin"><input type="number" step="0.01" placeholder="G/P en €" id="histVal" style="width:110px"><span class="spin-btns"><button type="button" class="spin-btn spin-up" tabindex="-1">▲</button><button type="button" class="spin-btn spin-down" tabindex="-1">▼</button></span></span>
+            <span class="num-spin"><input type="number" step="0.01" placeholder="Aportado €" id="histAport" style="width:110px"><span class="spin-btns"><button type="button" class="spin-btn spin-up" tabindex="-1">▲</button><button type="button" class="spin-btn spin-down" tabindex="-1">▼</button></span></span>
             <button class="btn small" id="histAddBtn">+ Añadir punto</button>
           </div>
           <div class="hist-row">
@@ -269,9 +271,38 @@
       <h3>Dividendo mensual proyectado (€)</h3>
       <div class="chart-wrap"><canvas id="projChart"></canvas></div>
     </div>
+    <div class="chart-card" style="height:300px;margin-top:16px;">
+      <h3 id="projMonthTitle">Dividendos por mes del año (cartera actual)</h3>
+      <div class="chart-wrap"><canvas id="projMonthChart"></canvas></div>
+    </div>
   </div>
 
     <!-- ===== ACCIONES ===== -->
+  <!-- ===== ROBO ADVISOR ===== -->
+  <div class="page" data-page="robo">
+    <section>
+      <h2>🤖 Robo Advisor — Registro de seguimiento</h2>
+      <p style="font-size:13px;color:#9a9ca3;margin:0 0 16px;">Anota cada vez que revises tu cartera: la fecha, cuánto llevas ganado y cuánto has aportado en total.</p>
+      <div class="hist-row" style="margin-bottom:16px;">
+        <input type="date" id="raDate">
+        <span class="num-spin"><input type="number" step="0.01" placeholder="Ganancia €" id="raGanancia" style="width:120px"><span class="spin-btns"><button type="button" class="spin-btn spin-up" tabindex="-1">▲</button><button type="button" class="spin-btn spin-down" tabindex="-1">▼</button></span></span>
+        <span class="num-spin"><input type="number" step="0.01" placeholder="Aportado € (total)" id="raAportado" style="width:140px"><span class="spin-btns"><button type="button" class="spin-btn spin-up" tabindex="-1">▲</button><button type="button" class="spin-btn spin-down" tabindex="-1">▼</button></span></span>
+        <button class="btn small" id="raAddBtn">+ Añadir registro</button>
+        <button class="btn small" id="raSaveHoyBtn">💾 Guardar hoy</button>
+      </div>
+      <div class="charts-row single" style="margin-bottom:20px;">
+        <div class="chart-card" style="height:300px;">
+          <h3>Evolución de ganancia y aportado (€)</h3>
+          <div class="chart-wrap"><canvas id="raChart"></canvas></div>
+        </div>
+      </div>
+      <table id="raTable">
+        <thead><tr><th>Fecha</th><th>Ganancia (€)</th><th>Aportado (€)</th><th>Rentabilidad</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </div>
+
   <div class="page" data-page="acciones">
     <div class="grid-top" id="topStatsAcciones"></div>
     <div class="charts-row single">
@@ -323,6 +354,7 @@ const SEED = {
     { activo: 'Oro (XAU/EUR)', simbolo: 'XAU', cantidad: 0, precioCompra: 0, precioActual: 2960 }
   ],
   history: [],
+    raHistory: [],
   simulations: []
 };
 
@@ -480,6 +512,7 @@ function applyMigrations(d) {
     d.history = JSON.parse(JSON.stringify(BACKFILL_HISTORY));
   }
   if (!Array.isArray(d.simulations)) d.simulations = [];
+  if (!Array.isArray(d.raHistory)) d.raHistory = [];
   if (!Array.isArray(d.commodities)) d.commodities = JSON.parse(JSON.stringify(SEED.commodities));
   // Rellenar dividendoUd si falta (dato añadido a posteriori)
   const DIV_DEFAULTS = { FGEQ: 0.21, VGWD: 2.08, EHDV: 1.41 };
@@ -617,7 +650,7 @@ function renderAssetTable(elId, group, currency) {
 
 function renderHistoryTable() {
   const el = document.getElementById('historyTable');
-  el.querySelector('thead').innerHTML = '<tr><th>Fecha</th><th>G/P (€)</th><th>Variación día</th><th></th></tr>';
+  el.querySelector('thead').innerHTML = '<tr><th>Fecha</th><th>G/P (€)</th><th>Aportado (€)</th><th>Variación día</th><th></th></tr>';
   const sorted = data.history.map((h, i) => ({ ...h, _idx: i })).sort((a, b) => a.fecha.localeCompare(b.fecha));
   el.querySelector('tbody').innerHTML = sorted.map((h, pos) => {
     const prev = pos > 0 ? sorted[pos - 1].va : null;
@@ -627,6 +660,7 @@ function renderHistoryTable() {
     <tr>
       <td>${h.fecha}</td>
       <td>${fmtEUR(h.va)}</td>
+      <td>${h.aport != null ? fmtEUR(h.aport) : '—'}</td>
       <td>${diffHtml}</td>
       <td><button class="del-btn" data-idx="${h._idx}">✕</button></td>
     </tr>`;
@@ -926,6 +960,41 @@ function renderSimulacion() {
 
   // Gráfica — mostrar etiquetas solo en años completos
   const labels = divData.map((_, t) => t % 12 === 0 ? 'Año ' + (t / 12) : '');
+  // Gráfica 2: dividendos por mes del año (al final de la proyección)
+  const mesesNombre = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const projMonthDatasets = etfsDiv.map((r, i) => {
+    const precio = r.precioActual || 1;
+    let extraShares = 0;
+    if (etfSel === 'ALL') extraShares = ((aportacion / nEtfs) / precio) * meses;
+    else if (etfSel === r.simbolo) extraShares = (aportacion / precio) * meses;
+    const totalShares = r.cantidad + extraShares;
+    const pagosMes = DIV_MONTHS[r.simbolo] || [];
+    const vals = Array(12).fill(0);
+    if (pagosMes.length > 0 && r.dividendoUd) {
+      const perPago = (totalShares * r.dividendoUd) / pagosMes.length;
+      pagosMes.forEach(m => { vals[m - 1] = +perPago.toFixed(2); });
+    }
+    return { label: r.simbolo, data: vals, backgroundColor: ['#5fd99a','#6f80f5','#e0a93a','#f472b6'][i % 4], borderRadius: 3, stack: 'mes' };
+  });
+  const titleEl = document.getElementById('projMonthTitle');
+  if (titleEl) titleEl.textContent = `Dividendos por mes del año (en ${anos} años)`;
+  destroyChart('projMonth');
+  charts.projMonth = new Chart(document.getElementById('projMonthChart'), {
+    type: 'bar',
+    data: { labels: mesesNombre, datasets: projMonthDatasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { color: '#c7c8cd', boxWidth: 12, font: { size: 11 } } },
+        tooltip: { mode: 'index', intersect: false, callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmtEUR(ctx.parsed.y)}` } }
+      },
+      scales: {
+        x: { stacked: true, ticks: { color: '#9a9ca3' }, grid: { color: '#262931' } },
+        y: { stacked: true, ticks: { color: '#9a9ca3', callback: v => v.toFixed(0) + '€' }, grid: { color: '#262931' }, beginAtZero: true }
+      }
+    }
+  });
+
   destroyChart('proj');
   charts.proj = new Chart(document.getElementById('projChart'), {
     type: 'line',
@@ -1023,11 +1092,13 @@ document.getElementById('resetBtn').addEventListener('click', () => {
 document.getElementById('histAddBtn').addEventListener('click', () => {
   const fecha = document.getElementById('histDate').value;
   const va = parseFloat(document.getElementById('histVal').value);
+  const aport = parseFloat(document.getElementById('histAport').value) || null;
   if (!fecha || isNaN(va)) return;
-  data.history.push({ fecha, va });
+  data.history.push({ fecha, va, ...(aport != null && { aport }) });
   save();
   document.getElementById('histDate').value = '';
   document.getElementById('histVal').value = '';
+  document.getElementById('histAport').value = '';
   renderAll();
 });
 document.getElementById('histSaveCurrentBtn').addEventListener('click', () => {
@@ -1192,129 +1263,4 @@ document.getElementById('priceBtn').addEventListener('click', async () => {
         updated++;
         results.push({ group: t.group, idx: t.idx, ok: true });
       } else {
-        results.push({ group: t.group, idx: t.idx, ok: false });
-      }
-    });
-
-    const skipped = ['etfsDiv', 'etfsAcc', 'stocks'].reduce((n, g) => n + data[g].length, 0) - targets.length;
-    save();
-    renderAll();
-    showRowStatuses(results);
-    statusEl.textContent = `✅ ${updated} precio(s) actualizado(s)` + (skipped > 0 ? ` · ${skipped} sin ticker reconocido (edítalos a mano)` : '') + '.';
-  } catch (e) {
-    statusEl.textContent = '❌ No se pudieron actualizar los precios: ' + e.message;
-    // Si falló antes de saber qué precios llegaron, marcamos todos los intentados como error.
-    if (targets.length > 0) {
-      renderAll();
-      showRowStatuses(targets.map(t => ({ group: t.group, idx: t.idx, ok: false })));
-    }
-  } finally {
-    btn.disabled = false;
-  }
-});
-
-// Spinners ▲▼ con aceleración: si se mantiene pulsado, el incremento se
-// repite cada vez más rápido. Delegado en document para que funcione también
-// con filas regeneradas por renderAll().
-function decimalsOf(step) {
-  const s = String(step || '1');
-  const i = s.indexOf('.');
-  return i === -1 ? 0 : s.length - i - 1;
-}
-function stepNumberInput(input, dir) {
-  const step = parseFloat(input.step) || 1;
-  const decimals = decimalsOf(input.step);
-  let val = parseFloat(input.value);
-  if (isNaN(val)) val = 0;
-  val = dir === 'up' ? val + step : val - step;
-  val = +val.toFixed(decimals);
-  input.value = val;
-  input.dispatchEvent(new Event('input', { bubbles: true }));
-}
-let spinTimer = null;
-let spinActive = false;
-function stopSpin() {
-  if (spinTimer) { clearTimeout(spinTimer); spinTimer = null; }
-  if (spinActive) {
-    spinActive = false;
-    renderAll(); // al soltar el botón, ya podemos redibujar tabla y gráficas
-  }
-}
-document.addEventListener('mousedown', e => {
-  const btn = e.target.closest('.spin-btn');
-  if (!btn) return;
-  e.preventDefault();
-  const wrap = btn.closest('.num-spin');
-  const input = wrap && wrap.querySelector('input');
-  if (!input) return;
-  const dir = btn.classList.contains('spin-up') ? 'up' : 'down';
-  stopSpin();
-  spinActive = true;
-  let ticks = 0;
-  function tick() {
-    stepNumberInput(input, dir);
-    ticks++;
-    const delay = Math.max(25, 220 - ticks * 12); // cada vez más rápido
-    spinTimer = setTimeout(tick, delay);
-  }
-  stepNumberInput(input, dir); // primer paso inmediato al pulsar
-  spinTimer = setTimeout(tick, 380); // pausa antes de empezar a repetir
-});
-document.addEventListener('mouseup', stopSpin);
-document.addEventListener('mouseleave', stopSpin);
-
-// Exportar / importar como archivo JSON: forma de respaldo 100% fiable que no
-// depende de que el navegador conserve el localStorage (Firefox, por ejemplo,
-// no siempre lo guarda de forma persistente para archivos abiertos como file://).
-document.getElementById('exportBtn').addEventListener('click', () => {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  const today = new Date().toISOString().slice(0, 10);
-  a.href = url;
-  a.download = `cartera-datos-${today}.json`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-});
-
-document.getElementById('importBtn').addEventListener('click', () => {
-  document.getElementById('importFile').click();
-});
-
-document.getElementById('importFile').addEventListener('change', e => {
-  const statusEl = document.getElementById('importStatus');
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const parsed = JSON.parse(reader.result);
-      if (!parsed || !Array.isArray(parsed.etfsDiv) || !Array.isArray(parsed.stocks)) {
-        throw new Error('El archivo no tiene el formato esperado.');
-      }
-      data = applyMigrations(parsed);
-      save();
-      renderAll();
-      statusEl.textContent = '✅ Datos importados correctamente.';
-      setTimeout(() => { statusEl.textContent = ''; }, 4000);
-    } catch (err) {
-      statusEl.textContent = '❌ Error al importar: ' + err.message;
-    }
-  };
-  reader.readAsText(file);
-  e.target.value = '';
-});
-
-document.getElementById('linkFileBtn').addEventListener('click', () => {
-  const statusEl = document.getElementById('linkStatus');
-  statusEl.textContent = 'El guardado automático a archivo está gestionado por Cowork.';
-  setTimeout(() => { statusEl.textContent = ''; }, 4000);
-});
-
-load();
-switchTab('resumen');
-</script>
-</body>
-</html>
+        results.push({ group: t.group, idx
