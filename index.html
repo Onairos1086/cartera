@@ -143,6 +143,12 @@
     padding:10px 32px;font-size:14px;cursor:pointer;
   ">Entrar</button>
   <div id="pinError" style="color:#f87171;font-size:13px;min-height:18px;"></div>
+  <div id="pinResetWrap" style="display:none;margin-top:4px;">
+    <button onclick="localStorage.removeItem('cartera_pin_attempts');localStorage.removeItem('cartera_pin_locked_until');document.getElementById('pinError').textContent='';document.getElementById('pinResetWrap').style.display='none';document.getElementById('pinInput').focus();"
+      style="background:none;border:none;color:#9a9ca3;font-size:12px;cursor:pointer;text-decoration:underline;">
+      Desbloquear acceso
+    </button>
+  </div>
 </div>
 <!-- ──────────────────────────────────────────────────────────────────────────── -->
 
@@ -454,6 +460,7 @@ function checkPin() {
     const mins = Math.ceil((lockedUntil - Date.now()) / 60000);
     document.getElementById('pinError').textContent =
       `Bloqueado. Espera ${mins} min.`;
+    document.getElementById('pinResetWrap').style.display = 'block';
   } else {
     document.getElementById('pinInput').focus();
   }
@@ -1263,4 +1270,219 @@ document.getElementById('priceBtn').addEventListener('click', async () => {
         updated++;
         results.push({ group: t.group, idx: t.idx, ok: true });
       } else {
-        results.push({ group: t.group, idx
+        results.push({ group: t.group, idx: t.idx, ok: false });
+      }
+    });
+
+    const skipped = ['etfsDiv', 'etfsAcc', 'stocks'].reduce((n, g) => n + data[g].length, 0) - targets.length;
+    save();
+    renderAll();
+    showRowStatuses(results);
+    statusEl.textContent = `✅ ${updated} precio(s) actualizado(s)` + (skipped > 0 ? ` · ${skipped} sin ticker reconocido (edítalos a mano)` : '') + '.';
+  } catch (e) {
+    statusEl.textContent = '❌ No se pudieron actualizar los precios: ' + e.message;
+    // Si falló antes de saber qué precios llegaron, marcamos todos los intentados como error.
+    if (targets.length > 0) {
+      renderAll();
+      showRowStatuses(targets.map(t => ({ group: t.group, idx: t.idx, ok: false })));
+    }
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// Spinners ▲▼ con aceleración: si se mantiene pulsado, el incremento se
+// repite cada vez más rápido. Delegado en document para que funcione también
+// con filas regeneradas por renderAll().
+function decimalsOf(step) {
+  const s = String(step || '1');
+  const i = s.indexOf('.');
+  return i === -1 ? 0 : s.length - i - 1;
+}
+function stepNumberInput(input, dir) {
+  const step = parseFloat(input.step) || 1;
+  const decimals = decimalsOf(input.step);
+  let val = parseFloat(input.value);
+  if (isNaN(val)) val = 0;
+  val = dir === 'up' ? val + step : val - step;
+  val = +val.toFixed(decimals);
+  input.value = val;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+let spinTimer = null;
+let spinActive = false;
+function stopSpin() {
+  if (spinTimer) { clearTimeout(spinTimer); spinTimer = null; }
+  if (spinActive) {
+    spinActive = false;
+    renderAll(); // al soltar el botón, ya podemos redibujar tabla y gráficas
+  }
+}
+document.addEventListener('mousedown', e => {
+  const btn = e.target.closest('.spin-btn');
+  if (!btn) return;
+  e.preventDefault();
+  const wrap = btn.closest('.num-spin');
+  const input = wrap && wrap.querySelector('input');
+  if (!input) return;
+  const dir = btn.classList.contains('spin-up') ? 'up' : 'down';
+  stopSpin();
+  spinActive = true;
+  let ticks = 0;
+  function tick() {
+    stepNumberInput(input, dir);
+    ticks++;
+    const delay = Math.max(25, 220 - ticks * 12); // cada vez más rápido
+    spinTimer = setTimeout(tick, delay);
+  }
+  stepNumberInput(input, dir); // primer paso inmediato al pulsar
+  spinTimer = setTimeout(tick, 380); // pausa antes de empezar a repetir
+});
+document.addEventListener('mouseup', stopSpin);
+document.addEventListener('mouseleave', stopSpin);
+
+// Exportar / importar como archivo JSON: forma de respaldo 100% fiable que no
+// depende de que el navegador conserve el localStorage (Firefox, por ejemplo,
+// no siempre lo guarda de forma persistente para archivos abiertos como file://).
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const today = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `cartera-datos-${today}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById('importBtn').addEventListener('click', () => {
+  document.getElementById('importFile').click();
+});
+
+document.getElementById('importFile').addEventListener('change', e => {
+  const statusEl = document.getElementById('importStatus');
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const parsed = JSON.parse(reader.result);
+      if (!parsed || !Array.isArray(parsed.etfsDiv) || !Array.isArray(parsed.stocks)) {
+        throw new Error('El archivo no tiene el formato esperado.');
+      }
+      data = applyMigrations(parsed);
+      save();
+      renderAll();
+      statusEl.textContent = '✅ Datos importados correctamente.';
+      setTimeout(() => { statusEl.textContent = ''; }, 4000);
+    } catch (err) {
+      statusEl.textContent = '❌ Error al importar: ' + err.message;
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+document.getElementById('linkFileBtn').addEventListener('click', () => {
+  const statusEl = document.getElementById('linkStatus');
+  statusEl.textContent = 'El guardado automático a archivo está gestionado por Cowork.';
+  setTimeout(() => { statusEl.textContent = ''; }, 4000);
+});
+
+// ── Robo Advisor ──────────────────────────────────────────────────────────
+function renderRoboAdvisor() {
+  const tbody = document.querySelector('#raTable tbody');
+  if (!tbody) return;
+  const rows = (data.history || []).slice().sort((a, b) => a.fecha.localeCompare(b.fecha));
+  tbody.innerHTML = rows.map((r, i) => {
+    const _ap = r.aport ?? r.aportado; const rent = _ap ? ((r.va / _ap) * 100).toFixed(1) + '%' : '—';
+    return `<tr>
+      <td>${r.fecha}</td>
+      <td class="${r.va >= 0 ? 'pos' : 'neg'}">${fmtEUR(r.va)}</td>
+      <td>${(r.aport ?? r.aportado) != null ? fmtEUR(r.aport ?? r.aportado) : '—'}</td>
+      <td>${rent}</td>
+      <td><button class="del-btn" data-ra="${i}">✕</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="5" style="color:#9a9ca3;text-align:center;padding:16px;">Sin registros aún</td></tr>';
+  tbody.querySelectorAll('.del-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const idx = +e.target.dataset.ra;
+      const sorted = (data.history || []).slice().sort((a, b) => a.fecha.localeCompare(b.fecha));
+      const toRemove = sorted[idx];
+      data.history = data.history.filter(r => r !== toRemove);
+      save(); renderRoboAdvisor();
+    });
+  });
+  // Gráfica
+  destroyChart('ra');
+  if (document.getElementById('raChart') && rows.length > 0) {
+    charts.ra = new Chart(document.getElementById('raChart'), {
+      type: 'line',
+      data: {
+        labels: rows.map(r => r.fecha),
+        datasets: [
+          {
+            label: 'Ganancia (€)',
+            data: rows.map(r => r.va),
+            borderColor: '#5fd99a', backgroundColor: 'rgba(95,217,154,0.12)',
+            fill: true, tension: 0.3, pointRadius: 4
+          },
+          {
+            label: 'Aportado (€)',
+            data: rows.map(r => r.aport ?? r.aportado ?? null),
+            borderColor: '#6f80f5', backgroundColor: 'rgba(111,128,245,0.10)',
+            fill: true, tension: 0.3, pointRadius: 4, spanGaps: true
+          }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { color: '#c7c8cd', boxWidth: 12, font: { size: 11 } } },
+          tooltip: { mode: 'index', intersect: false, callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmtEUR(ctx.parsed.y)}` } }
+        },
+        scales: {
+          x: { ticks: { color: '#9a9ca3' }, grid: { color: '#262931' } },
+          y: { ticks: { color: '#9a9ca3', callback: v => v + '€' }, grid: { color: '#262931' } }
+        }
+      }
+    });
+  }
+}
+
+document.getElementById('raAddBtn').addEventListener('click', () => {
+  const fecha = document.getElementById('raDate').value;
+  const va = parseFloat(document.getElementById('raGanancia').value);
+  const aport = parseFloat(document.getElementById('raAportado').value) || null;
+  if (!fecha || isNaN(va)) return;
+  if (!data.history) data.history = [];
+  data.history.push({ fecha, va, ...(aport != null && { aport }) });
+  save(); renderRoboAdvisor();
+  document.getElementById('raDate').value = '';
+  document.getElementById('raGanancia').value = '';
+  document.getElementById('raAportado').value = '';
+});
+
+document.getElementById('raSaveHoyBtn').addEventListener('click', () => {
+  const m = computeAll();
+  if (!data.history) data.history = [];
+  const fecha = new Date().toISOString().slice(0, 10);
+  const va = +(m.gpEUR + m.gpUSDinEUR + m.gpCommodities).toFixed(2);
+  data.history.push({ fecha, va });
+  save(); renderRoboAdvisor();
+});
+
+// Hook: render cuando se entra a la pestaña robo
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  if (btn.dataset.tab === 'robo') {
+    btn.addEventListener('click', renderRoboAdvisor);
+  }
+});
+
+load();
+switchTab('resumen');
+</script>
+</body>
+</html>
