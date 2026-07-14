@@ -315,6 +315,7 @@
 // Pega aquí la URL de tu Realtime Database (sin barra al final).
 // Ejemplo: 'https://mi-cartera-1234-default-rtdb.europe-west1.firebasedatabase.app'
 const FIREBASE_DB_URL = 'https://invest-f4759-default-rtdb.europe-west1.firebasedatabase.app';
+const FIREBASE_SECRET = 'bt1r6mez4EJQxYQJLbcmAUYp5FVXImiIYVzg1R5C';
 // ─────────────────────────────────────────────────────────────────────────────
 
 const STORAGE_KEY = 'cartera_data_v2';
@@ -410,7 +411,7 @@ let charts = {};
 let currentTab = 'resumen';
 
 // ─── Firebase REST helpers ────────────────────────────────────────────────────
-function fbUrl() { return FIREBASE_DB_URL ? FIREBASE_DB_URL + '/cartera.json' : null; }
+function fbUrl() { return FIREBASE_DB_URL ? FIREBASE_DB_URL + '/cartera.json?auth=' + FIREBASE_SECRET : null; }
 
 function setSyncStatus(msg, color) {
   const el = document.getElementById('syncStatus');
