@@ -253,32 +253,25 @@
 
   <!-- ===== SIMULACIÓN ===== -->
   <div class="page" data-page="simulacion">
-    <div class="sim-controls">
-      <select id="simSelect" style="background:#1c1f26;color:#e7e7ea;border:1px solid #343843;border-radius:8px;padding:6px 10px;font-size:13px;"></select>
-      <button class="btn small" id="simNewBtn">+ Nueva simulación</button>
-      <input id="simName" type="text" placeholder="Nombre de la simulación" style="background:#1c1f26;color:#e7e7ea;border:1px solid #343843;border-radius:8px;padding:6px 10px;font-size:13px;width:220px;">
-      <button class="btn small" id="simSaveBtn">💾 Guardar</button>
-      <button class="btn small" id="simDelBtn" style="color:#f87171;">🗑 Eliminar</button>
-      <span style="font-size:12px;color:#9a9ca3;margin-left:8px;">Objetivo:</span>
-      <span class="num-spin"><input type="number" id="simObjetivo" value="3000" min="0" step="100" style="width:90px;background:#1c1f26;color:#e7e7ea;border:1px solid #343843;border-radius:8px;padding:5px 8px;font-size:13px;"><span class="spin-btns"><button type="button" class="spin-btn spin-up" tabindex="-1">▲</button><button type="button" class="spin-btn spin-down" tabindex="-1">▼</button></span></span>
-      <span style="font-size:12px;color:#9a9ca3;">€/mes &nbsp;|&nbsp; Aportación mensual:</span>
-      <span class="num-spin"><input type="number" id="simAportacion" value="200" min="0" step="50" style="width:80px;background:#1c1f26;color:#e7e7ea;border:1px solid #343843;border-radius:8px;padding:5px 8px;font-size:13px;"><span class="spin-btns"><button type="button" class="spin-btn spin-up" tabindex="-1">▲</button><button type="button" class="spin-btn spin-down" tabindex="-1">▼</button></span></span>
-      <span style="font-size:12px;color:#9a9ca3;">€/mes</span>
+    <div class="grid-top" id="topStatsSim"></div>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:20px;background:#1c1f26;border:1px solid #2a2d36;border-radius:12px;padding:14px 16px;">
+      <span style="font-size:13px;color:#9a9ca3;">Aportación mensual:</span>
+      <span class="num-spin"><input type="number" id="projAportacion" value="200" min="0" step="50" style="width:85px;background:#14161b;color:#e7e7ea;border:1px solid #343843;border-radius:6px;padding:5px 8px;font-size:13px;"><span class="spin-btns"><button type="button" class="spin-btn spin-up" tabindex="-1">▲</button><button type="button" class="spin-btn spin-down" tabindex="-1">▼</button></span></span>
+      <span style="font-size:13px;color:#9a9ca3;">€/mes en</span>
+      <select id="projEtf" style="background:#14161b;color:#e7e7ea;border:1px solid #343843;border-radius:6px;padding:5px 8px;font-size:13px;"></select>
+      <span style="font-size:13px;color:#9a9ca3;">· Objetivo:</span>
+      <span class="num-spin"><input type="number" id="projObjetivo" value="3000" min="0" step="100" style="width:85px;background:#14161b;color:#e7e7ea;border:1px solid #343843;border-radius:6px;padding:5px 8px;font-size:13px;"><span class="spin-btns"><button type="button" class="spin-btn spin-up" tabindex="-1">▲</button><button type="button" class="spin-btn spin-down" tabindex="-1">▼</button></span></span>
+      <span style="font-size:13px;color:#9a9ca3;">€/mes · Proyección:</span>
+      <span class="num-spin"><input type="number" id="projAnos" value="10" min="1" max="40" step="1" style="width:60px;background:#14161b;color:#e7e7ea;border:1px solid #343843;border-radius:6px;padding:5px 8px;font-size:13px;"><span class="spin-btns"><button type="button" class="spin-btn spin-up" tabindex="-1">▲</button><button type="button" class="spin-btn spin-down" tabindex="-1">▼</button></span></span>
+      <span style="font-size:13px;color:#9a9ca3;">años</span>
     </div>
-    <div class="grid-top" id="topStatsSim" style="margin-top:16px;"></div>
-    <div class="cols" style="margin-top:20px;align-items:start;">
-      <div>
-        <p class="subgroup-title">ETFs con dividendo <span class="badge div">Dist</span></p>
-        <table id="simDivTable"><thead></thead><tbody></tbody></table>
-      </div>
-      <div>
-        <p class="subgroup-title">ETFs acumulación <span class="badge">Acc</span></p>
-        <table id="simAccTable"><thead></thead><tbody></tbody></table>
-      </div>
+    <div class="chart-card" style="height:340px;">
+      <h3>Dividendo mensual proyectado (€)</h3>
+      <div class="chart-wrap"><canvas id="projChart"></canvas></div>
     </div>
   </div>
 
-  <!-- ===== ACCIONES ===== -->
+    <!-- ===== ACCIONES ===== -->
   <div class="page" data-page="acciones">
     <div class="grid-top" id="topStatsAcciones"></div>
     <div class="charts-row single">
@@ -353,7 +346,7 @@ const BACKFILL_HISTORY = [
 const DIV_MONTHS = {
   FGEQ: [2, 5, 8, 11],   // Fidelity Global Quality Income: Feb, May, Ago, Nov
   VGWD: [3, 6, 9, 12],   // Vanguard All-World High Dividend: Mar, Jun, Sep, Dic
-  EHDV: [1, 4, 7, 10],   // Invesco EURO STOXX High Div: Ene, Abr, Jul, Oct
+  EHDV: [2, 5, 8, 11],   // Invesco EURO STOXX High Div: Feb, May, Ago, Nov
 };
 
 // Mapeo símbolo de la cartera -> ticker real en Financial Modeling Prep (FMP).
@@ -433,6 +426,9 @@ function checkPin() {
     document.getElementById('pinInput').focus();
   }
 })();
+document.getElementById('pinInput').addEventListener('input', e => {
+  if (e.target.value.length >= 4) checkPin();
+});
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─── Firebase REST helpers ────────────────────────────────────────────────────
@@ -764,28 +760,36 @@ function renderChartsFor(tab, m) {
         }
       }
     });
-    // Gráfica dividendos por mes
+    // Gráfica dividendos por mes — barras apiladas, un color por ETF
     destroyChart('divMonth');
     const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-    const totals = Array(12).fill(0);
-    (data.etfsDiv || []).forEach(r => {
+    const DIV_COLORS = ['#5fd99a','#6f80f5','#e0a93a','#f472b6','#34d399','#a78bfa','#fb923c'];
+    const divDatasets = (data.etfsDiv || []).map((r, i) => {
       const months = DIV_MONTHS[r.simbolo];
-      if (!months || !r.dividendoUd || !r.cantidad) return;
-      const perPago = (r.dividendoUd * r.cantidad) / months.length;
-      months.forEach(mes => { totals[mes - 1] += perPago; });
+      const vals = Array(12).fill(0);
+      if (months && r.dividendoUd && r.cantidad) {
+        const perPago = (r.dividendoUd * r.cantidad) / months.length;
+        months.forEach(mes => { vals[mes - 1] = perPago; });
+      }
+      return {
+        label: r.simbolo,
+        data: vals,
+        backgroundColor: DIV_COLORS[i % DIV_COLORS.length],
+        borderRadius: 3,
+        stack: 'div'
+      };
     });
     charts.divMonth = new Chart(document.getElementById('divMonthChart'), {
       type: 'bar',
-      data: {
-        labels: meses,
-        datasets: [{ label: 'Dividendo (€)', data: totals, backgroundColor: '#5fd99a', borderRadius: 4 }]
-      },
+      data: { labels: meses, datasets: divDatasets },
       options: {
         responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
+        plugins: {
+          legend: { display: true, position: 'bottom', labels: { color: '#c7c8cd', boxWidth: 12, font: { size: 11 } } }
+        },
         scales: {
-          x: { ticks: { color: '#9a9ca3' }, grid: { color: '#262931' } },
-          y: { ticks: { color: '#9a9ca3', callback: v => v.toFixed(2) + '€' }, grid: { color: '#262931' }, beginAtZero: true }
+          x: { stacked: true, ticks: { color: '#9a9ca3' }, grid: { color: '#262931' } },
+          y: { stacked: true, ticks: { color: '#9a9ca3', callback: v => v.toFixed(2) + '€' }, grid: { color: '#262931' }, beginAtZero: true }
         }
       }
     });
@@ -861,175 +865,118 @@ function refreshDerivedAll() {
   });
 }
 
-// ─── SIMULACIÓN ──────────────────────────────────────────────────────────────
-let currentSimId = null;
+// ─── PROYECCIÓN DE DIVIDENDOS ────────────────────────────────────────────────
+function renderSimulacion() {
+  const aportacion = parseFloat(document.getElementById('projAportacion').value) || 0;
+  const objetivo   = parseFloat(document.getElementById('projObjetivo').value) || 3000;
+  const anos       = parseInt(document.getElementById('projAnos').value) || 10;
+  const etfSel     = document.getElementById('projEtf').value; // 'ALL' o símbolo
 
-function simById(id) { return (data.simulations || []).find(s => s.id === id) || null; }
+  // Rellenar select la primera vez
+  const sel = document.getElementById('projEtf');
+  if (sel.options.length === 0 || sel.dataset.populated !== '1') {
+    const prev = sel.value;
+    sel.innerHTML = '<option value="ALL">Repartir entre todos</option>' +
+      (data.etfsDiv || []).map(r => `<option value="${r.simbolo}">${r.activo.split(' ').slice(0,3).join(' ')} (${r.simbolo})</option>`).join('');
+    if (prev) sel.value = prev;
+    sel.dataset.populated = '1';
+  }
 
-function newSimulation() {
-  const today = new Date().toISOString().slice(0, 10);
-  const sim = {
-    id: Date.now(),
-    nombre: 'Simulación ' + today,
-    fecha: today,
-    objetivo: 3000,
-    aportacion: 200,
-    etfsDiv: data.etfsDiv.map(r => ({
-      activo: r.activo, simbolo: r.simbolo,
-      cantidad: r.cantidad, precioCompra: r.precioCompra,
-      precioFuturo: r.precioActual, dividendoUd: r.dividendoUd || 0
-    })),
-    etfsAcc: data.etfsAcc.map(r => ({
-      activo: r.activo, simbolo: r.simbolo,
-      cantidad: r.cantidad, precioCompra: r.precioCompra,
-      precioFuturo: r.precioActual
-    }))
-  };
-  if (!data.simulations) data.simulations = [];
-  data.simulations.push(sim);
-  currentSimId = sim.id;
-  save();
-  renderSimulacion();
-}
+  const meses = anos * 12;
+  const etfsDiv = data.etfsDiv || [];
+  const nEtfs = etfsDiv.length || 1;
 
-function renderSimSelect() {
-  const sel = document.getElementById('simSelect');
-  if (!sel) return;
-  sel.innerHTML = (data.simulations || []).length === 0
-    ? '<option value="">Sin simulaciones</option>'
-    : (data.simulations || []).map(s =>
-        `<option value="${s.id}" ${s.id === currentSimId ? 'selected' : ''}>${s.nombre}</option>`
-      ).join('');
-}
+  // Dividendo actual
+  const divActual = etfsDiv.reduce((s, r) => s + (r.cantidad * (r.dividendoUd || 0)) / 12, 0);
 
-function renderSimTable(elId, rows, isDiv) {
-  const el = document.getElementById(elId);
-  if (!el) return;
-  const hdiv = isDiv
-    ? '<tr><th>Activo</th><th>Símbolo</th><th>Cantidad</th><th>P. compra</th><th>P. futuro</th><th>Div/ud (€/año)</th><th>Valor sim.</th><th>G/P</th><th>G/P%</th><th>Div mensual</th></tr>'
-    : '<tr><th>Activo</th><th>Símbolo</th><th>Cantidad</th><th>P. compra</th><th>P. futuro</th><th>Valor sim.</th><th>G/P</th><th>G/P%</th></tr>';
-  el.querySelector('thead').innerHTML = hdiv;
-  const simId = currentSimId;
-  el.querySelector('tbody').innerHTML = rows.map((r, i) => {
-    const valorSim = r.cantidad * r.precioFuturo;
-    const totalInv = r.cantidad * r.precioCompra;
-    const gpAbs = valorSim - totalInv;
-    const gpPct = totalInv ? (gpAbs / totalInv) * 100 : 0;
-    const divMes = isDiv ? (r.cantidad * (r.dividendoUd || 0)) / 12 : null;
-    const key = isDiv ? 'etfsDiv' : 'etfsAcc';
-    return `<tr data-idx="${i}">
-      <td>${r.activo}</td>
-      <td>${r.simbolo}</td>
-      <td><input class="sim-input-sm" data-sim="${simId}" data-key="${key}" data-idx="${i}" data-field="cantidad" type="number" step="0.01" value="${r.cantidad}"></td>
-      <td style="color:#9a9ca3">${fmtEUR(r.precioCompra)}</td>
-      <td><input class="sim-input-sm" data-sim="${simId}" data-key="${key}" data-idx="${i}" data-field="precioFuturo" type="number" step="0.01" value="${r.precioFuturo}"></td>
-      ${isDiv ? `<td><input class="sim-input-sm" data-sim="${simId}" data-key="${key}" data-idx="${i}" data-field="dividendoUd" type="number" step="0.01" value="${r.dividendoUd || 0}"></td>` : ''}
-      <td>${fmtEUR(valorSim)}</td>
-      <td class="${gpClass(gpAbs)}">${fmtEUR(gpAbs)}</td>
-      <td class="${gpClass(gpPct)}">${fmtPct(gpPct)}</td>
-      ${isDiv ? `<td class="pos">${fmtEUR(divMes)}</td>` : ''}
-    </tr>`;
-  }).join('');
-
-  el.querySelectorAll('input.sim-input-sm').forEach(inp => {
-    inp.addEventListener('input', e => {
-      const { sim, key, idx, field } = e.target.dataset;
-      const s = simById(+sim);
-      if (!s) return;
-      let val = parseFloat(e.target.value);
-      if (isNaN(val)) val = 0;
-      s[key][+idx][field] = val;
-      save();
-      renderSimStats(s);
+  // Proyección mes a mes
+  const divData = [];
+  for (let t = 0; t <= meses; t++) {
+    let divMes = 0;
+    etfsDiv.forEach(r => {
+      const precio = r.precioActual || 1;
+      let extraShares = 0;
+      if (etfSel === 'ALL') {
+        extraShares = ((aportacion / nEtfs) / precio) * t;
+      } else if (etfSel === r.simbolo) {
+        extraShares = (aportacion / precio) * t;
+      }
+      divMes += ((r.cantidad + extraShares) * (r.dividendoUd || 0)) / 12;
     });
+    divData.push(+divMes.toFixed(2));
+  }
+
+  // ¿Cuándo se alcanza el objetivo?
+  const mesObj = divData.findIndex(v => v >= objetivo);
+  let cuandoStr = mesObj < 0 ? `> ${anos} años (aumenta aportación o plazo)` :
+    mesObj === 0 ? '✅ Ya lo tienes' :
+    (() => {
+      const a = Math.floor(mesObj / 12), m = mesObj % 12;
+      return (a > 0 ? `${a} año${a > 1 ? 's' : ''}` : '') + (a > 0 && m > 0 ? ' y ' : '') + (m > 0 ? `${m} mes${m > 1 ? 'es' : ''}` : '');
+    })();
+
+  const divFinal = divData[divData.length - 1];
+
+  // Tarjetas de estadísticas
+  document.getElementById('topStatsSim').innerHTML =
+    statCard('Dividendo mensual actual', fmtEUR(divActual), divActual >= objetivo ? 'pos' : '') +
+    statCard('Dividendo en ' + anos + ' años', fmtEUR(divFinal), divFinal >= objetivo ? 'pos' : '') +
+    statCard('Tiempo para objetivo', cuandoStr) +
+    statCard('Total aportado en ' + anos + ' años', fmtEUR(aportacion * meses));
+
+  // Gráfica — mostrar etiquetas solo en años completos
+  const labels = divData.map((_, t) => t % 12 === 0 ? 'Año ' + (t / 12) : '');
+  destroyChart('proj');
+  charts.proj = new Chart(document.getElementById('projChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Dividendo mensual (€)',
+          data: divData,
+          borderColor: '#5fd99a',
+          backgroundColor: 'rgba(95,217,154,0.10)',
+          fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2
+        },
+        {
+          label: 'Objetivo ' + objetivo + '€/mes',
+          data: Array(meses + 1).fill(objetivo),
+          borderColor: '#f87171',
+          borderDash: [6, 3],
+          borderWidth: 1.5, pointRadius: 0, fill: false
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { color: '#c7c8cd', boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          mode: 'index', intersect: false,
+          callbacks: {
+            title: ctx => {
+              const t = ctx[0].dataIndex;
+              const a = Math.floor(t / 12), m = t % 12;
+              return `Mes ${t} · Año ${a}${m > 0 ? ', mes ' + m : ''}`;
+            },
+            label: ctx => ' ' + ctx.dataset.label.split(' (')[0] + ': ' + fmtEUR(ctx.parsed.y)
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#9a9ca3', maxRotation: 0 }, grid: { color: '#262931' } },
+        y: { ticks: { color: '#9a9ca3', callback: v => v.toFixed(0) + '€' }, grid: { color: '#262931' }, beginAtZero: true }
+      }
+    }
   });
 }
 
-function renderSimStats(sim) {
-  const divMesTotal = (sim.etfsDiv || []).reduce((a, r) => a + (r.cantidad * (r.dividendoUd || 0)) / 12, 0);
-  const valorDiv = (sim.etfsDiv || []).reduce((a, r) => a + r.cantidad * r.precioFuturo, 0);
-  const valorAcc = (sim.etfsAcc || []).reduce((a, r) => a + r.cantidad * r.precioFuturo, 0);
-  const totalSim = valorDiv + valorAcc;
-  const totalInv = [...(sim.etfsDiv || []), ...(sim.etfsAcc || [])].reduce((a, r) => a + r.cantidad * r.precioCompra, 0);
-  const gpTotal = totalSim - totalInv;
-  const objetivo = sim.objetivo || 3000;
-  const aportacion = sim.aportacion || 0;
-  const deficit = objetivo - divMesTotal;
-  // Capital adicional necesario basado en yield actual de ETFs div
-  const yieldAnual = divMesTotal > 0 && valorDiv > 0 ? (divMesTotal * 12) / valorDiv : 0;
-  let anosStr = '—';
-  if (deficit > 0 && aportacion > 0 && yieldAnual > 0) {
-    // Capital total necesario
-    const capitalNecesario = (objetivo * 12) / yieldAnual;
-    const gapCapital = Math.max(0, capitalNecesario - totalSim);
-    // Años = capital_gap / (aportacion_mensual × 12) [lineal, sin reinversión]
-    const anos = gapCapital / (aportacion * 12);
-    anosStr = anos < 0.1 ? '< 1 mes' : anos.toFixed(1) + ' años';
-  } else if (deficit <= 0) {
-    anosStr = '✅ Objetivo alcanzado';
-  }
+['projAportacion', 'projObjetivo', 'projAnos'].forEach(id => {
+  document.getElementById(id).addEventListener('input', renderSimulacion);
+});
+document.getElementById('projEtf').addEventListener('change', renderSimulacion);
 
-  const el = document.getElementById('topStatsSim');
-  if (!el) return;
-  el.innerHTML =
-    statCard('Valor total simulado', fmtEUR(totalSim)) +
-    statCard('G/P total', fmtEUR(gpTotal) + ' (' + fmtPct(totalInv ? gpTotal/totalInv*100 : 0) + ')', gpClass(gpTotal)) +
-    statCard('Dividendo mensual', fmtEUR(divMesTotal), divMesTotal >= objetivo ? 'pos' : '') +
-    statCard('Déficit para objetivo', deficit > 0 ? fmtEUR(deficit) + '/mes' : '✅ Superávit ' + fmtEUR(-deficit), gpClass(-deficit)) +
-    statCard('Años para objetivo', anosStr);
-}
-
-function renderSimulacion() {
-  renderSimSelect();
-  const sim = simById(currentSimId);
-  if (!sim) {
-    document.getElementById('topStatsSim').innerHTML = '<div style="color:#9a9ca3;font-size:13px;">Crea una simulación con "+ Nueva simulación"</div>';
-    document.getElementById('simDivTable').querySelector('thead').innerHTML = '';
-    document.getElementById('simDivTable').querySelector('tbody').innerHTML = '';
-    document.getElementById('simAccTable').querySelector('thead').innerHTML = '';
-    document.getElementById('simAccTable').querySelector('tbody').innerHTML = '';
-    document.getElementById('simName').value = '';
-    return;
-  }
-  document.getElementById('simName').value = sim.nombre;
-  document.getElementById('simObjetivo').value = sim.objetivo || 3000;
-  document.getElementById('simAportacion').value = sim.aportacion || 200;
-  renderSimTable('simDivTable', sim.etfsDiv || [], true);
-  renderSimTable('simAccTable', sim.etfsAcc || [], false);
-  renderSimStats(sim);
-}
-
-// Listeners de la pestaña simulación (se registran una vez)
-document.getElementById('simNewBtn').addEventListener('click', newSimulation);
-document.getElementById('simSaveBtn').addEventListener('click', () => {
-  const sim = simById(currentSimId);
-  if (!sim) return;
-  sim.nombre = document.getElementById('simName').value || sim.nombre;
-  sim.objetivo = parseFloat(document.getElementById('simObjetivo').value) || 3000;
-  sim.aportacion = parseFloat(document.getElementById('simAportacion').value) || 0;
-  save();
-  renderSimulacion();
-});
-document.getElementById('simDelBtn').addEventListener('click', () => {
-  if (!currentSimId) return;
-  if (!confirm('¿Eliminar esta simulación?')) return;
-  data.simulations = (data.simulations || []).filter(s => s.id !== currentSimId);
-  currentSimId = data.simulations.length > 0 ? data.simulations[data.simulations.length - 1].id : null;
-  save();
-  renderSimulacion();
-});
-document.getElementById('simSelect').addEventListener('change', e => {
-  currentSimId = +e.target.value || null;
-  renderSimulacion();
-});
-document.getElementById('simObjetivo').addEventListener('input', () => {
-  const sim = simById(currentSimId);
-  if (sim) { sim.objetivo = parseFloat(document.getElementById('simObjetivo').value) || 3000; renderSimStats(sim); }
-});
-document.getElementById('simAportacion').addEventListener('input', () => {
-  const sim = simById(currentSimId);
-  if (sim) { sim.aportacion = parseFloat(document.getElementById('simAportacion').value) || 0; renderSimStats(sim); }
-});
 // ─────────────────────────────────────────────────────────────────────────────
 
 function renderAll() {
@@ -1367,6 +1314,7 @@ document.getElementById('linkFileBtn').addEventListener('click', () => {
 });
 
 load();
+switchTab('resumen');
 </script>
 </body>
 </html>
