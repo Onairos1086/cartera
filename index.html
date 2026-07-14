@@ -466,7 +466,7 @@ function checkPin() {
   }
 })();
 document.getElementById('pinInput').addEventListener('input', e => {
-  if (e.target.value.length >= 4) checkPin();
+  if (e.target.value.length === 4) checkPin();
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1479,4 +1479,15 @@ document.getElementById('raSaveHoyBtn').addEventListener('click', () => {
   save(); renderRoboAdvisor();
 });
 
-// Hook: render cuando se entra a la pestaña r
+// Hook: render cuando se entra a la pestaña robo
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  if (btn.dataset.tab === 'robo') {
+    btn.addEventListener('click', renderRoboAdvisor);
+  }
+});
+
+load();
+switchTab('resumen');
+</script>
+</body>
+</html>
