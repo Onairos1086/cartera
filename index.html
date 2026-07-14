@@ -170,6 +170,7 @@
     <button class="tab-btn" data-tab="etfs">ETFs</button>
     <button class="tab-btn" data-tab="acciones">Acciones (equity)</button>
     <button class="tab-btn" data-tab="simulacion">🔮 Simulación</button>
+    <button class="tab-btn" data-tab="materias">🥇 Materias primas</button>
   </div>
 
   <!-- ===== RESUMEN ===== -->
@@ -225,6 +226,28 @@
           <table id="etfAccTable"><thead></thead><tbody></tbody></table>
         </div>
       </div>
+    </section>
+    <section>
+      <h2>Dividendos estimados por mes</h2>
+      <p style="color:#9a9ca3;font-size:12px;margin-bottom:12px;">Basado en los meses habituales de pago de cada ETF y el dividendo por unidad configurado.</p>
+      <div class="chart-card" style="height:260px;">
+        <div class="chart-wrap"><canvas id="divMonthChart"></canvas></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===== MATERIAS PRIMAS ===== -->
+  <div class="page" data-page="materias">
+    <div class="grid-top" id="topStatsMaterias"></div>
+    <div class="charts-row single">
+      <div class="chart-card">
+        <h3>Ganancia / Pérdida por materia prima (%)</h3>
+        <div class="chart-wrap"><canvas id="materiasGpChart"></canvas></div>
+      </div>
+    </div>
+    <section>
+      <h2>Materias primas</h2>
+      <table id="commoditiesTable"><thead></thead><tbody></tbody></table>
     </section>
   </div>
 
@@ -303,6 +326,9 @@ const SEED = {
     { activo: 'Netflix', simbolo: 'NFLX', cantidad: 0.39, precioCompra: 86.88, precioActual: 74.76 },
     { activo: 'Palantir', simbolo: 'PLTR', cantidad: 0.12, precioCompra: 76.93, precioActual: 113.83 }
   ],
+  commodities: [
+    { activo: 'Oro (XAU/EUR)', simbolo: 'XAU', cantidad: 0, precioCompra: 0, precioActual: 2960 }
+  ],
   history: [],
   simulations: []
 };
@@ -321,6 +347,14 @@ const BACKFILL_HISTORY = [
   { fecha: '2026-06-25', va: 163.52 },
   { fecha: '2026-06-26', va: 105.24 }
 ];
+
+// Meses en que cada ETF con dividendo realiza el pago (1=Ene…12=Dic).
+// Son aproximaciones basadas en la política habitual de cada fondo.
+const DIV_MONTHS = {
+  FGEQ: [2, 5, 8, 11],   // Fidelity Global Quality Income: Feb, May, Ago, Nov
+  VGWD: [3, 6, 9, 12],   // Vanguard All-World High Dividend: Mar, Jun, Sep, Dic
+  EHDV: [1, 4, 7, 10],   // Invesco EURO STOXX High Div: Ene, Abr, Jul, Oct
+};
 
 // Mapeo símbolo de la cartera -> ticker real en Financial Modeling Prep (FMP).
 // Los ETFs UCITS europeos cotizan en Xetra y necesitan el sufijo ".DE".
@@ -450,6 +484,7 @@ function applyMigrations(d) {
     d.history = JSON.parse(JSON.stringify(BACKFILL_HISTORY));
   }
   if (!Array.isArray(d.simulations)) d.simulations = [];
+  if (!Array.isArray(d.commodities)) d.commodities = JSON.parse(JSON.stringify(SEED.commodities));
   // Rellenar dividendoUd si falta (dato añadido a posteriori)
   const DIV_DEFAULTS = { FGEQ: 0.21, VGWD: 2.08, EHDV: 1.41 };
   (d.etfsDiv || []).forEach(r => {
@@ -613,6 +648,7 @@ function computeAll() {
   const etfDivRows = data.etfsDiv.map(computed);
   const etfAccRows = data.etfsAcc.map(computed);
   const stockRows = data.stocks.map(computed);
+  const commodityRows = (data.commodities || []).map(computed);
   const sum = arr => arr.reduce((a, r) => a + r, 0);
 
   const valorActEUR = sum([...etfDivRows, ...etfAccRows].map(r => r.valorAct));
@@ -627,17 +663,25 @@ function computeAll() {
 
   const valorActUSDinEUR = valorActUSD * data.fx;
   const totalInvUSDinEUR = totalInvUSD * data.fx;
-  const totalValorEUR = valorActEUR + valorActUSDinEUR;
-  const totalInvCombEUR = totalInvEUR + totalInvUSDinEUR;
+
+  const valorActCommodities = sum(commodityRows.map(r => r.valorAct));
+  const totalInvCommodities = sum(commodityRows.map(r => r.totalInv));
+  const gpCommodities = valorActCommodities - totalInvCommodities;
+  const gpCommoditiesPct = totalInvCommodities ? (gpCommodities / totalInvCommodities) * 100 : 0;
+
+  const totalValorEUR = valorActEUR + valorActUSDinEUR + valorActCommodities;
+  const totalInvCombEUR = totalInvEUR + totalInvUSDinEUR + totalInvCommodities;
   const totalGPEUR = totalValorEUR - totalInvCombEUR;
   const totalGPPct = totalInvCombEUR ? (totalGPEUR / totalInvCombEUR) * 100 : 0;
 
   const valorDiv = sum(etfDivRows.map(r => r.valorAct));
   const valorAcc = sum(etfAccRows.map(r => r.valorAct));
 
-  return { etfDivRows, etfAccRows, stockRows, valorActEUR, totalInvEUR, gpEUR, gpEURPct,
-    valorActUSD, totalInvUSD, gpUSD, gpUSDPct, valorActUSDinEUR, totalValorEUR, totalInvCombEUR,
-    totalGPEUR, totalGPPct, valorDiv, valorAcc };
+  return { etfDivRows, etfAccRows, stockRows, commodityRows,
+    valorActEUR, totalInvEUR, gpEUR, gpEURPct,
+    valorActUSD, totalInvUSD, gpUSD, gpUSDPct, valorActUSDinEUR,
+    valorActCommodities, totalInvCommodities, gpCommodities, gpCommoditiesPct,
+    totalValorEUR, totalInvCombEUR, totalGPEUR, totalGPPct, valorDiv, valorAcc };
 }
 
 function renderStats(m) {
@@ -660,6 +704,11 @@ function renderStats(m) {
     statCard('Valor actual acciones', fmtUSD(m.valorActUSD)) +
     statCard('Valor en EUR', fmtEUR(m.valorActUSDinEUR)) +
     statCard('G/P acciones', fmtUSD(m.gpUSD) + ' (' + fmtPct(m.gpUSDPct) + ')', gpClass(m.gpUSD));
+
+  document.getElementById('topStatsMaterias').innerHTML =
+    statCard('Invertido materias primas', fmtEUR(m.totalInvCommodities)) +
+    statCard('Valor actual', fmtEUR(m.valorActCommodities)) +
+    statCard('G/P materias primas', fmtEUR(m.gpCommodities) + ' (' + fmtPct(m.gpCommoditiesPct) + ')', gpClass(m.gpCommodities));
 }
 
 function renderChartsFor(tab, m) {
@@ -668,10 +717,10 @@ function renderChartsFor(tab, m) {
     charts.alloc = new Chart(document.getElementById('allocChart'), {
       type: 'doughnut',
       data: {
-        labels: ['ETFs con dividendo', 'ETFs acumulación', 'Acciones (USD→EUR)'],
+        labels: ['ETFs con dividendo', 'ETFs acumulación', 'Acciones (USD→EUR)', 'Materias primas'],
         datasets: [{
-          data: [m.valorDiv, m.valorAcc, m.valorActUSDinEUR],
-          backgroundColor: ['#5fd99a', '#6f80f5', '#e0a93a']
+          data: [m.valorDiv, m.valorAcc, m.valorActUSDinEUR, m.valorActCommodities],
+          backgroundColor: ['#5fd99a', '#6f80f5', '#e0a93a', '#f4c542']
         }]
       },
       options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#c7c8cd', boxWidth: 12, font: { size: 11 } } } } }
@@ -715,6 +764,48 @@ function renderChartsFor(tab, m) {
         }
       }
     });
+    // Gráfica dividendos por mes
+    destroyChart('divMonth');
+    const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    const totals = Array(12).fill(0);
+    (data.etfsDiv || []).forEach(r => {
+      const months = DIV_MONTHS[r.simbolo];
+      if (!months || !r.dividendoUd || !r.cantidad) return;
+      const perPago = (r.dividendoUd * r.cantidad) / months.length;
+      months.forEach(mes => { totals[mes - 1] += perPago; });
+    });
+    charts.divMonth = new Chart(document.getElementById('divMonthChart'), {
+      type: 'bar',
+      data: {
+        labels: meses,
+        datasets: [{ label: 'Dividendo (€)', data: totals, backgroundColor: '#5fd99a', borderRadius: 4 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#9a9ca3' }, grid: { color: '#262931' } },
+          y: { ticks: { color: '#9a9ca3', callback: v => v.toFixed(2) + '€' }, grid: { color: '#262931' }, beginAtZero: true }
+        }
+      }
+    });
+  } else if (tab === 'materias') {
+    destroyChart('materiasGp');
+    charts.materiasGp = new Chart(document.getElementById('materiasGpChart'), {
+      type: 'bar',
+      data: {
+        labels: m.commodityRows.map(r => r.simbolo),
+        datasets: [{ label: 'G/P %', data: m.commodityRows.map(r => r.gpPct), backgroundColor: m.commodityRows.map(r => r.gpPct >= 0 ? '#4ade80' : '#f87171') }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#9a9ca3' }, grid: { color: '#262931' } },
+          y: { ticks: { color: '#9a9ca3', callback: v => v + '%' }, grid: { color: '#262931' } }
+        }
+      }
+    });
   } else if (tab === 'acciones') {
     destroyChart('stockGp');
     charts.stockGp = new Chart(document.getElementById('stockGpChart'), {
@@ -742,8 +833,8 @@ function renderChartsFor(tab, m) {
 // tabla completa y las gráficas se vuelven a dibujar del todo (renderAll)
 // solo cuando el campo pierde el foco (blur), que es cuando ya hemos
 // terminado de escribir ese valor.
-const GROUP_TABLE_ID = { etfsDiv: 'etfDivTable', etfsAcc: 'etfAccTable', stocks: 'stocksTable' };
-const GROUP_CURRENCY = { etfsDiv: 'EUR', etfsAcc: 'EUR', stocks: 'USD' };
+const GROUP_TABLE_ID = { etfsDiv: 'etfDivTable', etfsAcc: 'etfAccTable', stocks: 'stocksTable', commodities: 'commoditiesTable' };
+const GROUP_CURRENCY = { etfsDiv: 'EUR', etfsAcc: 'EUR', stocks: 'USD', commodities: 'EUR' };
 
 function refreshDerivedRow(group, idx) {
   const tableId = GROUP_TABLE_ID[group];
@@ -765,7 +856,7 @@ function refreshDerivedAll() {
   if (document.activeElement !== fxEl) fxEl.value = data.fx; // no pisar lo que se está tecleando
   const m = computeAll();
   renderStats(m);
-  ['etfsDiv', 'etfsAcc', 'stocks'].forEach(group => {
+  ['etfsDiv', 'etfsAcc', 'stocks', 'commodities'].forEach(group => {
     data[group].forEach((_, idx) => refreshDerivedRow(group, idx));
   });
 }
@@ -949,6 +1040,7 @@ function renderAll() {
   renderAssetTable('etfDivTable', 'etfsDiv', 'EUR');
   renderAssetTable('etfAccTable', 'etfsAcc', 'EUR');
   renderAssetTable('stocksTable', 'stocks', 'USD');
+  renderAssetTable('commoditiesTable', 'commodities', 'EUR');
   renderHistoryTable();
 
   renderChartsFor(currentTab, m);
@@ -1255,129 +1347,26 @@ document.getElementById('importFile').addEventListener('change', e => {
       if (!parsed || !Array.isArray(parsed.etfsDiv) || !Array.isArray(parsed.stocks)) {
         throw new Error('El archivo no tiene el formato esperado.');
       }
-      data = parsed;
+      data = applyMigrations(parsed);
       save();
       renderAll();
       statusEl.textContent = '✅ Datos importados correctamente.';
+      setTimeout(() => { statusEl.textContent = ''; }, 4000);
     } catch (err) {
-      statusEl.textContent = '❌ No se pudo importar: ' + err.message;
-    } finally {
-      setTimeout(() => { statusEl.textContent = ''; }, 10000);
-      e.target.value = '';
+      statusEl.textContent = '❌ Error al importar: ' + err.message;
     }
   };
   reader.readAsText(file);
+  e.target.value = '';
 });
 
-// Autoguardado en un archivo real del disco (File System Access API).
-// Solo Chrome/Edge lo soportan; en Firefox/Safari el botón se oculta y se
-// puede seguir usando Exportar/Importar JSON manualmente.
-const supportsFS = 'showSaveFilePicker' in window;
-let fileHandle = null;
-let linkState = 'none'; // 'none' | 'needs-permission' | 'linked'
-
-function idbOpen() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open('carteraDB', 1);
-    req.onupgradeneeded = () => { req.result.createObjectStore('handles'); };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-async function idbSetHandle(handle) {
-  const db = await idbOpen();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction('handles', 'readwrite');
-    tx.objectStore('handles').put(handle, 'dataFile');
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-async function idbGetHandle() {
-  const db = await idbOpen();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction('handles', 'readonly');
-    const req = tx.objectStore('handles').get('dataFile');
-    req.onsuccess = () => resolve(req.result || null);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function writeDataToFile() {
-  if (!supportsFS || linkState !== 'linked' || !fileHandle) return;
-  try {
-    const writable = await fileHandle.createWritable();
-    await writable.write(JSON.stringify(data, null, 2));
-    await writable.close();
-  } catch (e) {
-    linkState = 'needs-permission';
-    refreshLinkButton('❌ No se pudo guardar en el archivo: ' + e.message);
-  }
-}
-
-function refreshLinkButton(msg) {
-  const btn = document.getElementById('linkFileBtn');
+document.getElementById('linkFileBtn').addEventListener('click', () => {
   const statusEl = document.getElementById('linkStatus');
-  if (!supportsFS) {
-    btn.style.display = 'none';
-    statusEl.textContent = '';
-    return;
-  }
-  if (linkState === 'linked') {
-    btn.textContent = '🔗 Archivo vinculado (' + (fileHandle ? fileHandle.name : '') + ')';
-    statusEl.textContent = msg || '✅ Cada cambio se guarda automáticamente en ese archivo.';
-  } else if (linkState === 'needs-permission') {
-    btn.textContent = '🔓 Reactivar autoguardado';
-    statusEl.textContent = msg || 'Vinculado a ' + (fileHandle ? fileHandle.name : 'un archivo') + ', pero hace falta volver a dar permiso.';
-  } else {
-    btn.textContent = '🔗 Vincular archivo de autoguardado';
-    statusEl.textContent = msg || '';
-  }
-}
-
-document.getElementById('linkFileBtn').addEventListener('click', async () => {
-  if (!supportsFS) return;
-  if (fileHandle && linkState === 'needs-permission') {
-    try {
-      const perm = await fileHandle.requestPermission({ mode: 'readwrite' });
-      if (perm === 'granted') {
-        linkState = 'linked';
-        await writeDataToFile();
-      }
-    } catch (e) { /* el usuario canceló o falló el permiso */ }
-    refreshLinkButton();
-    return;
-  }
-  try {
-    const handle = await window.showSaveFilePicker({
-      suggestedName: 'cartera-datos.json',
-      types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }]
-    });
-    fileHandle = handle;
-    await idbSetHandle(handle);
-    linkState = 'linked';
-    await writeDataToFile();
-  } catch (e) {
-    if (e.name !== 'AbortError') refreshLinkButton('❌ No se pudo vincular: ' + e.message);
-  }
-  refreshLinkButton();
+  statusEl.textContent = 'El guardado automático a archivo está gestionado por Cowork.';
+  setTimeout(() => { statusEl.textContent = ''; }, 4000);
 });
-
-(async function initFileLink() {
-  if (!supportsFS) { refreshLinkButton(); return; }
-  try {
-    const handle = await idbGetHandle();
-    if (handle) {
-      fileHandle = handle;
-      const perm = await handle.queryPermission({ mode: 'readwrite' });
-      linkState = perm === 'granted' ? 'linked' : 'needs-permission';
-    }
-  } catch (e) { /* sin handle guardado todavía */ }
-  refreshLinkButton();
-})();
 
 load();
-switchTab('resumen');
 </script>
 </body>
 </html>
