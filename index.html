@@ -123,6 +123,32 @@
 </style>
 </head>
 <body>
+
+<!-- ── Pantalla de PIN ─────────────────────────────────────────────────────── -->
+<div id="pinOverlay" style="
+  position:fixed;inset:0;z-index:9999;
+  background:#14161b;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+">
+  <div style="font-size:28px;">🔒</div>
+  <div style="font-size:18px;font-weight:600;color:#e7e7ea;">Mi cartera de inversión</div>
+  <div style="font-size:13px;color:#9a9ca3;margin-bottom:4px;">Introduce el PIN para acceder</div>
+  <input id="pinInput" type="password" inputmode="numeric" maxlength="10"
+    placeholder="PIN"
+    style="
+      width:160px;text-align:center;font-size:22px;letter-spacing:6px;
+      background:#1c1f26;color:#e7e7ea;border:1px solid #343843;
+      border-radius:10px;padding:10px 14px;outline:none;
+    "
+    onkeydown="if(event.key==='Enter') checkPin()"
+  >
+  <button onclick="checkPin()" style="
+    background:#3a4ed6;color:#fff;border:none;border-radius:8px;
+    padding:10px 32px;font-size:14px;cursor:pointer;
+  ">Entrar</button>
+  <div id="pinError" style="color:#f87171;font-size:13px;min-height:18px;"></div>
+</div>
+<!-- ──────────────────────────────────────────────────────────────────────────── -->
   <h1>Mi cartera de inversión</h1>
   <div class="sub">Datos guardados en este navegador (ya no se leen de ningún Excel/Sheet) · edítalos directamente abajo.</div>
 
@@ -316,6 +342,7 @@
 // Ejemplo: 'https://mi-cartera-1234-default-rtdb.europe-west1.firebasedatabase.app'
 const FIREBASE_DB_URL = 'https://invest-f4759-default-rtdb.europe-west1.firebasedatabase.app';
 const FIREBASE_SECRET = 'bt1r6mez4EJQxYQJLbcmAUYp5FVXImiIYVzg1R5C';
+const EDIT_PIN = '1086';
 // ─────────────────────────────────────────────────────────────────────────────
 
 const STORAGE_KEY = 'cartera_data_v2';
@@ -409,6 +436,57 @@ const DIV_CURRENCY = {
 let data = null;
 let charts = {};
 let currentTab = 'resumen';
+
+// ─── PIN gate ────────────────────────────────────────────────────────────────
+const PIN_ATTEMPTS_KEY = 'cartera_pin_attempts';
+const PIN_LOCKED_KEY   = 'cartera_pin_locked_until';
+const MAX_ATTEMPTS = 3;
+const LOCK_MINUTES = 15;
+
+function checkPin() {
+  const lockedUntil = parseInt(localStorage.getItem(PIN_LOCKED_KEY) || '0', 10);
+  if (Date.now() < lockedUntil) {
+    const mins = Math.ceil((lockedUntil - Date.now()) / 60000);
+    document.getElementById('pinError').textContent =
+      `Demasiados intentos fallidos. Espera ${mins} min.`;
+    return;
+  }
+
+  const entered = document.getElementById('pinInput').value;
+  if (entered === EDIT_PIN) {
+    localStorage.removeItem(PIN_ATTEMPTS_KEY);
+    localStorage.removeItem(PIN_LOCKED_KEY);
+    document.getElementById('pinOverlay').style.display = 'none';
+  } else {
+    let attempts = parseInt(localStorage.getItem(PIN_ATTEMPTS_KEY) || '0', 10) + 1;
+    localStorage.setItem(PIN_ATTEMPTS_KEY, attempts);
+    const remaining = MAX_ATTEMPTS - attempts;
+    if (remaining <= 0) {
+      const until = Date.now() + LOCK_MINUTES * 60 * 1000;
+      localStorage.setItem(PIN_LOCKED_KEY, until);
+      localStorage.removeItem(PIN_ATTEMPTS_KEY);
+      document.getElementById('pinError').textContent =
+        `Bloqueado ${LOCK_MINUTES} minutos por demasiados intentos fallidos.`;
+    } else {
+      document.getElementById('pinError').textContent =
+        `PIN incorrecto. ${remaining} intento${remaining > 1 ? 's' : ''} restante${remaining > 1 ? 's' : ''}.`;
+    }
+    document.getElementById('pinInput').value = '';
+    document.getElementById('pinInput').focus();
+  }
+}
+
+(function initPinScreen() {
+  const lockedUntil = parseInt(localStorage.getItem(PIN_LOCKED_KEY) || '0', 10);
+  if (Date.now() < lockedUntil) {
+    const mins = Math.ceil((lockedUntil - Date.now()) / 60000);
+    document.getElementById('pinError').textContent =
+      `Bloqueado. Espera ${mins} min.`;
+  } else {
+    document.getElementById('pinInput').focus();
+  }
+})();
+// ─────────────────────────────────────────────────────────────────────────────
 
 // ─── Firebase REST helpers ────────────────────────────────────────────────────
 function fbUrl() { return FIREBASE_DB_URL ? FIREBASE_DB_URL + '/cartera.json?auth=' + FIREBASE_SECRET : null; }
