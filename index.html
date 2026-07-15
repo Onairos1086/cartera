@@ -1465,4 +1465,379 @@ document.getElementById('linkFileBtn').addEventListener('click', () => {
 function renderRoboAdvisor() {
   const tbody = document.querySelector('#raTable tbody');
   if (!tbody) return;
-  const rows = (data.robo || []).slice().sort((a, b) => a.fecha.localeCompare(b.fech
+  const rows = (data.robo || []).slice().sort((a, b) => a.fecha.localeCompare(b.fecha));
+
+  tbody.innerHTML = rows.map((r, i) => {
+    const prev = i > 0 ? rows[i-1].valor : null;
+    const diff = prev !== null ? r.valor - prev : null;
+    const diffHtml = diff === null ? '—' : `<span class="${diff>=0?'pos':'neg'}">${diff>=0?'+':''}${fmtEUR(diff)}</span>`;
+    return `<tr>
+      <td>${r.fecha}</td>
+      <td class="${r.valor >= 0 ? 'pos' : 'neg'}">${fmtEUR(r.valor)}</td>
+      <td>${r.aportado != null ? fmtEUR(r.aportado) : '—'}</td>
+      <td>${diffHtml}</td>
+      <td><button class="del-btn" data-ra="${i}">✕</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="5" style="color:#9a9ca3;text-align:center;padding:16px;">Sin registros aún</td></tr>';
+  tbody.querySelectorAll('.del-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const idx = +e.target.dataset.ra;
+      const sorted = (data.robo || []).slice().sort((a, b) => a.fecha.localeCompare(b.fecha));
+      const toRemove = sorted[idx];
+      data.robo = data.robo.filter(r => r !== toRemove);
+      save(); renderRoboAdvisor();
+    });
+  });
+  // Gráfica
+  destroyChart('ra');
+  if (document.getElementById('raChart') && rows.length > 0) {
+    charts.ra = new Chart(document.getElementById('raChart'), {
+      type: 'line',
+      data: {
+        labels: rows.map(r => r.fecha),
+        datasets: [
+          {
+            label: 'Ganancia (€)',
+            data: rows.map(r => r.valor),
+            borderColor: '#5fd99a', backgroundColor: 'rgba(95,217,154,0.12)',
+            fill: true, tension: 0.3, pointRadius: 4
+          },
+          {
+            label: 'Aportado (€)',
+            data: rows.map(r => r.aportado ?? null),
+            borderColor: '#6f80f5', backgroundColor: 'rgba(111,128,245,0.10)',
+            fill: true, tension: 0.3, pointRadius: 4, spanGaps: true
+          }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { color: '#c7c8cd', boxWidth: 12, font: { size: 11 } } },
+          tooltip: { mode: 'index', intersect: false, callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmtEUR(ctx.parsed.y)}` } }
+        },
+        scales: {
+          x: { ticks: { color: '#9a9ca3' }, grid: { color: '#262931' } },
+          y: { ticks: { color: '#9a9ca3', callback: v => v + '€' }, grid: { color: '#262931' } }
+        }
+      }
+    });
+  }
+}
+
+document.getElementById('raAddBtn').addEventListener('click', () => {
+  const fecha = document.getElementById('raDate').value;
+  const valor = parseFloat(document.getElementById('raGanancia').value);
+  const aportado = parseFloat(document.getElementById('raAportado').value) || undefined;
+  if (!fecha || isNaN(valor)) return;
+  if (!data.robo) data.robo = [];
+  data.robo.push({ fecha, valor, ...(aportado !== undefined && { aportado }) });
+  save(); renderRoboAdvisor();
+  document.getElementById('raDate').value = '';
+  document.getElementById('raGanancia').value = '';
+  document.getElementById('raAportado').value = '';
+});
+
+document.getElementById('raSaveHoyBtn').addEventListener('click', () => {
+  const m = computeAll();
+  if (!data.robo) data.robo = [];
+  const fecha = new Date().toISOString().slice(0, 10);
+  const valor = +(m.gpEUR + m.gpUSDinEUR + (m.gpCommodities||0)).toFixed(2);
+  const aportado = +m.totalInvCombEUR.toFixed(2);
+  data.robo.push({ fecha, valor, aportado });
+  save(); renderRoboAdvisor();
+});
+
+// Hook: render cuando se entra a la pestaña robo
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  if (btn.dataset.tab === 'robo') {
+    btn.addEventListener('click', renderRoboAdvisor);
+  }
+});
+
+// ── Ingresos y gastos ──────────────────────────────────────────────────────
+const MESES_ES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+let budCurrentMonth = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+
+function budDefaultMonth() {
+  return {
+    ingresos: [ { concepto: 'Nómina', importe: 0 }, { concepto: 'Dividendos', importe: 0 } ],
+    gastos: [
+      { cat: 'Vivienda', items: [] },
+      { cat: 'Servicios', items: [] },
+      { cat: 'Comida', items: [] },
+      { cat: 'Transporte', items: [] },
+      { cat: 'Entretenimiento', items: [] }
+    ]
+  };
+}
+
+// Devuelve el mes solicitado; si no existe lo crea heredando del mes anterior
+// más reciente (los gastos mensuales se copian con importe; los puntuales no).
+function budGetMonth(key) {
+  const months = data.budget.months;
+  if (months[key]) return months[key];
+  const prevKeys = Object.keys(months).filter(k => k < key).sort();
+  let base;
+  if (prevKeys.length > 0) {
+    const src = months[prevKeys[prevKeys.length - 1]];
+    base = {
+      ingresos: src.ingresos.map(i => ({ concepto: i.concepto, importe: 0 })),
+      gastos: src.gastos.map(c => ({
+        cat: c.cat,
+        items: c.items.filter(it => it.mensual).map(it => ({ concepto: it.concepto, importe: it.importe, mensual: true }))
+      }))
+    };
+  } else {
+    base = budDefaultMonth();
+  }
+  months[key] = base;
+  return base;
+}
+
+function budMonthLabel(key) {
+  const [y, m] = key.split('-').map(Number);
+  return `${MESES_ES[m - 1]} ${y}`;
+}
+
+function budShiftMonth(key, delta) {
+  let [y, m] = key.split('-').map(Number);
+  m += delta;
+  while (m < 1) { m += 12; y--; }
+  while (m > 12) { m -= 12; y++; }
+  return `${y}-${String(m).padStart(2, '0')}`;
+}
+
+function budTotals(mo) {
+  const ingresos = mo.ingresos.reduce((s, i) => s + (+i.importe || 0), 0);
+  let fijos = 0, puntuales = 0;
+  mo.gastos.forEach(c => c.items.forEach(it => {
+    const v = +it.importe || 0;
+    if (it.mensual) fijos += v; else puntuales += v;
+  }));
+  const gastos = fijos + puntuales;
+  const balance = ingresos - gastos;
+  const tasa = ingresos > 0 ? (balance / ingresos) * 100 : 0;
+  return { ingresos, gastos, fijos, puntuales, balance, tasa };
+}
+
+function renderBudget() {
+  const mo = budGetMonth(budCurrentMonth);
+  const mInput = document.getElementById('budMonth');
+  if (mInput && mInput.value !== budCurrentMonth) mInput.value = budCurrentMonth;
+  document.getElementById('budMonthLabel').textContent = budMonthLabel(budCurrentMonth);
+
+  const t = budTotals(mo);
+  document.getElementById('topStatsGastos').innerHTML =
+    statCard('Ingresos', fmtEUR(t.ingresos), 'pos') +
+    statCard('Gastos', fmtEUR(t.gastos), 'neg') +
+    statCard('Balance', fmtEUR(t.balance), gpClass(t.balance)) +
+    statCard('Tasa de ahorro', fmtPct(t.tasa), gpClass(t.balance)) +
+    statCard('Fijos (mensuales)', fmtEUR(t.fijos)) +
+    statCard('Puntuales', fmtEUR(t.puntuales));
+
+  renderBudIngresos(mo);
+  renderBudGastos(mo, true);   // fijos
+  renderBudGastos(mo, false);  // puntuales
+  renderBudCharts(mo);
+}
+
+function renderBudIngresos(mo) {
+  const el = document.getElementById('budIngresosTable');
+  el.querySelector('thead').innerHTML = '<tr><th>Concepto</th><th>Importe</th><th></th></tr>';
+  const rows = mo.ingresos.map((i, idx) => `
+    <tr data-i="${idx}">
+      <td><input class="bud-name" data-f="concepto" value="${escAttr(i.concepto)}"></td>
+      <td><input class="bud-amount" type="number" step="0.01" data-f="importe" value="${i.importe}"></td>
+      <td><button class="del-btn" data-del="${idx}">✕</button></td>
+    </tr>`).join('');
+  el.querySelector('tbody').innerHTML = rows + `
+    <tr class="add-row"><td colspan="3"><button class="btn small" id="budAddIng">+ Añadir ingreso</button></td></tr>`;
+
+  el.querySelectorAll('tr[data-i]').forEach(tr => {
+    const idx = +tr.dataset.i;
+    tr.querySelectorAll('input').forEach(inp => {
+      inp.addEventListener('input', e => {
+        const f = e.target.dataset.f;
+        mo.ingresos[idx][f] = f === 'importe' ? (parseFloat(e.target.value) || 0) : e.target.value;
+        save();
+        refreshBudStats(mo);
+      });
+      inp.addEventListener('blur', renderBudget);
+    });
+    tr.querySelector('.del-btn').addEventListener('click', () => {
+      mo.ingresos.splice(idx, 1); save(); renderBudget();
+    });
+  });
+  document.getElementById('budAddIng').addEventListener('click', () => {
+    mo.ingresos.push({ concepto: 'Nuevo ingreso', importe: 0 }); save(); renderBudget();
+  });
+}
+
+function renderBudGastos(mo, mensual) {
+  const el = document.getElementById(mensual ? 'budGastosFijosTable' : 'budGastosPuntTable');
+  el.querySelector('thead').innerHTML = '<tr><th>Concepto</th><th>Importe</th><th title="Mensual">M</th><th></th></tr>';
+  let html = '';
+  mo.gastos.forEach((c, ci) => {
+    const items = c.items.filter(it => !!it.mensual === mensual);
+    const sub = items.reduce((s, it) => s + (+it.importe || 0), 0);
+    html += `
+      <tr class="cat-head" data-ci="${ci}">
+        <td><input class="bud-name cat" data-catname value="${escAttr(c.cat)}"></td>
+        <td class="cat-sub">${fmtEUR(sub)}</td>
+        <td></td>
+        <td><button class="del-btn" data-delcat title="Borrar categoría">🗑</button></td>
+      </tr>`;
+    c.items.forEach((it, ii) => {
+      if (!!it.mensual !== mensual) return;
+      html += `
+      <tr data-ci="${ci}" data-ii="${ii}">
+        <td style="padding-left:18px;"><input class="bud-name" data-f="concepto" value="${escAttr(it.concepto)}"></td>
+        <td><input class="bud-amount" type="number" step="0.01" data-f="importe" value="${it.importe}"></td>
+        <td><input type="checkbox" class="m-chk" ${it.mensual ? 'checked' : ''}></td>
+        <td><button class="del-btn" data-delitem>✕</button></td>
+      </tr>`;
+    });
+    html += `
+      <tr class="add-row"><td colspan="4"><button class="btn small" data-additem="${ci}">+ Añadir a ${escHtml(c.cat)}</button></td></tr>`;
+  });
+  el.querySelector('tbody').innerHTML = html;
+
+  // Nombre de categoría
+  el.querySelectorAll('tr.cat-head').forEach(tr => {
+    const ci = +tr.dataset.ci;
+    const nameInp = tr.querySelector('[data-catname]');
+    nameInp.addEventListener('input', e => { mo.gastos[ci].cat = e.target.value; save(); });
+    nameInp.addEventListener('blur', renderBudget);
+    tr.querySelector('[data-delcat]').addEventListener('click', () => {
+      if (!confirm(`¿Borrar la categoría "${mo.gastos[ci].cat}" y todos sus gastos?`)) return;
+      mo.gastos.splice(ci, 1); save(); renderBudget();
+    });
+  });
+  // Conceptos
+  el.querySelectorAll('tr[data-ii]').forEach(tr => {
+    const ci = +tr.dataset.ci, ii = +tr.dataset.ii;
+    tr.querySelectorAll('input.bud-name, input.bud-amount').forEach(inp => {
+      inp.addEventListener('input', e => {
+        const f = e.target.dataset.f;
+        mo.gastos[ci].items[ii][f] = f === 'importe' ? (parseFloat(e.target.value) || 0) : e.target.value;
+        save();
+        refreshBudStats(mo);
+      });
+      inp.addEventListener('blur', renderBudget);
+    });
+    tr.querySelector('.m-chk').addEventListener('change', e => {
+      mo.gastos[ci].items[ii].mensual = e.target.checked; save(); renderBudget();
+    });
+    tr.querySelector('[data-delitem]').addEventListener('click', () => {
+      mo.gastos[ci].items.splice(ii, 1); save(); renderBudget();
+    });
+  });
+  // Añadir concepto
+  el.querySelectorAll('[data-additem]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const ci = +btn.dataset.additem;
+      mo.gastos[ci].items.push({ concepto: 'Nuevo', importe: 0, mensual });
+      save(); renderBudget();
+    });
+  });
+}
+
+function refreshBudStats(mo) {
+  const t = budTotals(mo);
+  const cards = document.getElementById('topStatsGastos');
+  if (!cards) return;
+  cards.innerHTML =
+    statCard('Ingresos', fmtEUR(t.ingresos), 'pos') +
+    statCard('Gastos', fmtEUR(t.gastos), 'neg') +
+    statCard('Balance', fmtEUR(t.balance), gpClass(t.balance)) +
+    statCard('Tasa de ahorro', fmtPct(t.tasa), gpClass(t.balance)) +
+    statCard('Fijos (mensuales)', fmtEUR(t.fijos)) +
+    statCard('Puntuales', fmtEUR(t.puntuales));
+  // subtotales de categoría
+  document.querySelectorAll('#budGastosFijosTable tr.cat-head, #budGastosPuntTable tr.cat-head').forEach(tr => {
+    const tableFijos = tr.closest('table').id === 'budGastosFijosTable';
+    const ci = +tr.dataset.ci;
+    const sub = mo.gastos[ci].items.filter(it => !!it.mensual === tableFijos).reduce((s, it) => s + (+it.importe || 0), 0);
+    const cell = tr.querySelector('.cat-sub');
+    if (cell) cell.textContent = fmtEUR(sub);
+  });
+}
+
+function escAttr(s) { return String(s).replace(/"/g, '&quot;'); }
+function escHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+function renderBudCharts(mo) {
+  // Pie por categoría (total, fijos + puntuales)
+  const catLabels = [], catVals = [];
+  mo.gastos.forEach(c => {
+    const v = c.items.reduce((s, it) => s + (+it.importe || 0), 0);
+    if (v > 0) { catLabels.push(c.cat); catVals.push(+v.toFixed(2)); }
+  });
+  destroyChart('budCat');
+  charts.budCat = new Chart(document.getElementById('budCatChart'), {
+    type: 'doughnut',
+    data: { labels: catLabels.length ? catLabels : ['Sin gastos'], datasets: [{
+      data: catVals.length ? catVals : [1],
+      backgroundColor: ['#6f80f5','#5fd99a','#e0a93a','#f472b6','#34d399','#a78bfa','#fb923c','#f87171','#38bdf8']
+    }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#c7c8cd', boxWidth: 12, font: { size: 11 } } } } }
+  });
+
+  // Barras ingresos vs gastos por mes del año en curso
+  const year = budCurrentMonth.slice(0, 4);
+  const ing = Array(12).fill(0), gas = Array(12).fill(0);
+  Object.keys(data.budget.months).forEach(k => {
+    if (k.slice(0, 4) !== year) return;
+    const idx = +k.slice(5, 7) - 1;
+    const t = budTotals(data.budget.months[k]);
+    ing[idx] = +t.ingresos.toFixed(2);
+    gas[idx] = +t.gastos.toFixed(2);
+  });
+  const mesesCorto = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  destroyChart('budYear');
+  charts.budYear = new Chart(document.getElementById('budYearChart'), {
+    type: 'bar',
+    data: { labels: mesesCorto, datasets: [
+      { label: 'Ingresos', data: ing, backgroundColor: '#5fd99a', borderRadius: 3 },
+      { label: 'Gastos', data: gas, backgroundColor: '#f87171', borderRadius: 3 }
+    ] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { color: '#c7c8cd', boxWidth: 12, font: { size: 11 } } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmtEUR(ctx.parsed.y)}` } }
+      },
+      scales: {
+        x: { ticks: { color: '#9a9ca3' }, grid: { color: '#262931' } },
+        y: { ticks: { color: '#9a9ca3', callback: v => v + '€' }, grid: { color: '#262931' }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+document.getElementById('budPrev').addEventListener('click', () => { budCurrentMonth = budShiftMonth(budCurrentMonth, -1); renderBudget(); });
+document.getElementById('budNext').addEventListener('click', () => { budCurrentMonth = budShiftMonth(budCurrentMonth, 1); renderBudget(); });
+document.getElementById('budMonth').addEventListener('change', e => { if (e.target.value) { budCurrentMonth = e.target.value; renderBudget(); } });
+document.getElementById('budAddCat').addEventListener('click', () => {
+  const mo = budGetMonth(budCurrentMonth);
+  mo.gastos.push({ cat: 'Nueva categoría', items: [] });
+  save(); renderBudget();
+});
+document.getElementById('budFillDiv').addEventListener('click', () => {
+  const mo = budGetMonth(budCurrentMonth);
+  const divMensual = +(data.etfsDiv || []).reduce((s, r) => s + (r.cantidad * (r.dividendoUd || 0)) / 12, 0).toFixed(2);
+  let row = mo.ingresos.find(i => /dividend/i.test(i.concepto));
+  if (!row) { row = { concepto: 'Dividendos', importe: 0 }; mo.ingresos.push(row); }
+  row.importe = divMensual;
+  save(); renderBudget();
+  const st = document.getElementById('budDivStatus');
+  st.textContent = `✅ Dividendo mensual estimado: ${fmtEUR(divMensual)}`;
+  setTimeout(() => { st.textContent = ''; }, 8000);
+});
+
+load();
+switchTab('resumen');
+</script>
+</body>
+</html>
