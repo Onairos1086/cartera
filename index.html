@@ -452,6 +452,7 @@ const DIV_MONTHS = {
   FGEQ: [2, 5, 8, 11],   // Fidelity Global Quality Income: Feb, May, Ago, Nov
   VGWD: [3, 6, 9, 12],   // Vanguard All-World High Dividend: Mar, Jun, Sep, Dic
   EHDV: [2, 5, 8, 11],   // Invesco EURO STOXX High Div: Feb, May, Ago, Nov
+  ISPA: [1, 4, 7, 10],   // iShares STOXX Global Select Dividend 100: Ene, Abr, Jul, Oct
 };
 
 // Mapeo símbolo de la cartera -> ticker real en Financial Modeling Prep (FMP).
@@ -466,6 +467,7 @@ const SYMBOL_TO_FMP = {
   FGEQ: 'FGEQ.DE',
   VGWD: 'VGWD.DE',
   EHDV: 'EHDV.DE',
+  ISPA: 'ISPA.DE',
   EUNL: 'EUNL.DE',
   SNDK: 'SNDK',
   NVDA: 'NVDA',
@@ -591,7 +593,7 @@ function applyMigrations(d) {
   if (!d.budget || typeof d.budget !== 'object' || !d.budget.months) d.budget = { months: {} };
   if (!Array.isArray(d.commodities)) d.commodities = JSON.parse(JSON.stringify(SEED.commodities));
   // Rellenar dividendoUd si falta (dato añadido a posteriori)
-  const DIV_DEFAULTS = { FGEQ: 0.21, VGWD: 2.08, EHDV: 1.41 };
+  const DIV_DEFAULTS = { FGEQ: 0.21, VGWD: 2.08, EHDV: 1.41, ISPA: 1.64 };
   (d.etfsDiv || []).forEach(r => {
     if (!r.dividendoUd && DIV_DEFAULTS[r.simbolo]) r.dividendoUd = DIV_DEFAULTS[r.simbolo];
   });
@@ -666,11 +668,16 @@ function destroyChart(key) {
 function renderAssetTable(elId, group, currency) {
   const el = document.getElementById(elId);
   const fmt = currency === 'USD' ? fmtUSD : fmtEUR;
+  const isDiv = group === 'etfsDiv';
   el.querySelector('thead').innerHTML =
-    '<tr><th>Activo</th><th>Símbolo</th><th>Cant.</th><th>P. compra</th><th>P. actual</th><th>Invertido</th><th>Valor act.</th><th>G/P</th><th>G/P %</th><th></th></tr>';
+    '<tr><th>Activo</th><th>Símbolo</th><th>Cant.</th><th>P. compra</th><th>P. actual</th><th>Invertido</th><th>Valor act.</th><th>G/P</th><th>G/P %</th>' +
+    (isDiv ? '<th title="Dividendo por participación al año">Div/ud €/año</th>' : '') + '<th></th></tr>';
 
   const rows = data[group].map((r, i) => {
     const c = computed(r);
+    const divCell = isDiv
+      ? `<td><span class="num-spin"><input class="cell-input" id="cell-${group}-${i}-dividendoUd" data-field="dividendoUd" type="number" step="0.01" value="${c.dividendoUd || 0}"><span class="spin-btns"><button type="button" class="spin-btn spin-up" tabindex="-1">▲</button><button type="button" class="spin-btn spin-down" tabindex="-1">▼</button></span></span></td>`
+      : '';
     return `
     <tr data-idx="${i}">
       <td><input class="cell-input name" id="cell-${group}-${i}-activo" data-field="activo" value="${c.activo}"><span class="price-stat" id="pstat-${group}-${i}"></span></td>
@@ -682,13 +689,14 @@ function renderAssetTable(elId, group, currency) {
       <td>${fmt(c.valorAct)}</td>
       <td class="${gpClass(c.gpAbs)}">${fmt(c.gpAbs)}</td>
       <td class="${gpClass(c.gpPct)}">${fmtPct(c.gpPct)}</td>
+      ${divCell}
       <td><button class="del-btn" data-idx="${i}">✕</button></td>
     </tr>`;
   }).join('');
 
   const addRow = `
     <tr class="add-row">
-      <td colspan="10"><button class="btn small" data-add="${group}">+ Añadir activo</button></td>
+      <td colspan="${isDiv ? 11 : 10}"><button class="btn small" data-add="${group}">+ Añadir activo</button></td>
     </tr>`;
 
   el.querySelector('tbody').innerHTML = rows + addRow;
@@ -698,7 +706,7 @@ function renderAssetTable(elId, group, currency) {
       const idx = +e.target.closest('tr').dataset.idx;
       const field = e.target.dataset.field;
       let val = e.target.value;
-      if (field === 'cantidad' || field === 'precioCompra' || field === 'precioActual') {
+      if (field === 'cantidad' || field === 'precioCompra' || field === 'precioActual' || field === 'dividendoUd') {
         val = parseFloat(val); if (isNaN(val)) val = 0;
       }
       data[group][idx][field] = val;
