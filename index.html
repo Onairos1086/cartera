@@ -1572,20 +1572,31 @@ function budDefaultMonth() {
   };
 }
 
+// Normaliza un mes: Firebase no guarda arrays vacíos, así que al releer
+// pueden faltar `ingresos`, `gastos` o los `items` de una categoría. Aquí nos
+// aseguramos de que siempre existan como listas para no romper el render.
+function budNormalize(mo) {
+  if (!mo || typeof mo !== 'object') return { ingresos: [], gastos: [] };
+  if (!Array.isArray(mo.ingresos)) mo.ingresos = [];
+  if (!Array.isArray(mo.gastos)) mo.gastos = [];
+  mo.gastos.forEach(c => { if (!Array.isArray(c.items)) c.items = []; });
+  return mo;
+}
+
 // Devuelve el mes solicitado; si no existe lo crea heredando del mes anterior
 // más reciente (los gastos mensuales se copian con importe; los puntuales no).
 function budGetMonth(key) {
   const months = data.budget.months;
-  if (months[key]) return months[key];
+  if (months[key]) return budNormalize(months[key]);
   const prevKeys = Object.keys(months).filter(k => k < key).sort();
   let base;
   if (prevKeys.length > 0) {
-    const src = months[prevKeys[prevKeys.length - 1]];
+    const src = budNormalize(months[prevKeys[prevKeys.length - 1]]);
     base = {
       ingresos: src.ingresos.map(i => ({ concepto: i.concepto, importe: 0 })),
       gastos: src.gastos.map(c => ({
         cat: c.cat,
-        items: c.items.filter(it => it.mensual).map(it => ({ concepto: it.concepto, importe: it.importe, mensual: true }))
+        items: (c.items || []).filter(it => it.mensual).map(it => ({ concepto: it.concepto, importe: it.importe, mensual: true }))
       }))
     };
   } else {
@@ -1609,9 +1620,9 @@ function budShiftMonth(key, delta) {
 }
 
 function budTotals(mo) {
-  const ingresos = mo.ingresos.reduce((s, i) => s + (+i.importe || 0), 0);
+  const ingresos = (mo.ingresos || []).reduce((s, i) => s + (+i.importe || 0), 0);
   let fijos = 0, puntuales = 0;
-  mo.gastos.forEach(c => c.items.forEach(it => {
+  (mo.gastos || []).forEach(c => (c.items || []).forEach(it => {
     const v = +it.importe || 0;
     if (it.mensual) fijos += v; else puntuales += v;
   }));
