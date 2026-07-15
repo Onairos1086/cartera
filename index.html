@@ -235,31 +235,23 @@
   <!-- ===== ETFs ===== -->
   <div class="page" data-page="etfs">
     <div class="grid-top" id="topStatsEtfs"></div>
-    <div class="charts-row single">
+    <section>
+      <h2>ETFs con reparto de dividendo <span class="badge div">Dist</span></h2>
+      <table id="etfDivTable"><thead></thead><tbody></tbody></table>
+    </section>
+    <div class="charts-row">
       <div class="chart-card">
         <h3>Ganancia / Pérdida por ETF (%)</h3>
         <div class="chart-wrap"><canvas id="etfGpChart"></canvas></div>
       </div>
-    </div>
-    <section>
-      <h2>ETFs (cuenta EUR)</h2>
-      <div class="cols">
-        <div>
-          <p class="subgroup-title">Con reparto de dividendo <span class="badge div">Dist</span></p>
-          <table id="etfDivTable"><thead></thead><tbody></tbody></table>
-        </div>
-        <div>
-          <p class="subgroup-title">Acumulación (sin reparto) <span class="badge">Acc</span></p>
-          <table id="etfAccTable"><thead></thead><tbody></tbody></table>
-        </div>
-      </div>
-    </section>
-    <section>
-      <h2>Dividendos estimados por mes</h2>
-      <p style="color:#9a9ca3;font-size:12px;margin-bottom:12px;">Basado en los meses habituales de pago de cada ETF y el dividendo por unidad configurado.</p>
-      <div class="chart-card" style="height:260px;">
+      <div class="chart-card">
+        <h3>Dividendos estimados por mes</h3>
         <div class="chart-wrap"><canvas id="divMonthChart"></canvas></div>
       </div>
+    </div>
+    <section>
+      <h2>ETFs de acumulación · sin reparto <span class="badge">Acc</span></h2>
+      <table id="etfAccTable"><thead></thead><tbody></tbody></table>
     </section>
   </div>
 
