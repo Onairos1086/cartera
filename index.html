@@ -777,14 +777,24 @@ function computeAll() {
 
   const valorActUSDinEUR = valorActUSD * data.fx;
   const totalInvUSDinEUR = totalInvUSD * data.fx;
+  const gpUSDinEUR = gpUSD * data.fx;
 
   const valorActCommodities = sum(commodityRows.map(r => r.valorAct));
   const totalInvCommodities = sum(commodityRows.map(r => r.totalInv));
   const gpCommodities = valorActCommodities - totalInvCommodities;
   const gpCommoditiesPct = totalInvCommodities ? (gpCommodities / totalInvCommodities) * 100 : 0;
 
-  const totalValorEUR = valorActEUR + valorActUSDinEUR + valorActCommodities;
-  const totalInvCombEUR = totalInvEUR + totalInvUSDinEUR + totalInvCommodities;
+  // Robo Advisor: cuenta gestionada aparte. Tomamos la última anotación
+  // (valor = valor total de la cuenta; aportado = total invertido en ella).
+  const roboArr = (data.robo || []).slice().sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const roboLast = roboArr.length ? roboArr[roboArr.length - 1] : null;
+  const roboValor = roboLast ? (+roboLast.valor || 0) : 0;
+  const roboAportado = roboLast ? (+roboLast.aportado || 0) : 0;
+  const roboGP = roboValor - roboAportado;
+  const roboGPPct = roboAportado ? (roboGP / roboAportado) * 100 : 0;
+
+  const totalValorEUR = valorActEUR + valorActUSDinEUR + valorActCommodities + roboValor;
+  const totalInvCombEUR = totalInvEUR + totalInvUSDinEUR + totalInvCommodities + roboAportado;
   const totalGPEUR = totalValorEUR - totalInvCombEUR;
   const totalGPPct = totalInvCombEUR ? (totalGPEUR / totalInvCombEUR) * 100 : 0;
 
@@ -793,8 +803,9 @@ function computeAll() {
 
   return { etfDivRows, etfAccRows, stockRows, commodityRows,
     valorActEUR, totalInvEUR, gpEUR, gpEURPct,
-    valorActUSD, totalInvUSD, gpUSD, gpUSDPct, valorActUSDinEUR,
+    valorActUSD, totalInvUSD, gpUSD, gpUSDPct, valorActUSDinEUR, gpUSDinEUR,
     valorActCommodities, totalInvCommodities, gpCommodities, gpCommoditiesPct,
+    roboValor, roboAportado, roboGP, roboGPPct,
     totalValorEUR, totalInvCombEUR, totalGPEUR, totalGPPct, valorDiv, valorAcc };
 }
 
@@ -804,7 +815,8 @@ function renderStats(m) {
     statCard('Invertido total', fmtEUR(m.totalInvCombEUR)) +
     statCard('G/P total', fmtEUR(m.totalGPEUR) + ' (' + fmtPct(m.totalGPPct) + ')', gpClass(m.totalGPEUR)) +
     statCard('ETFs (EUR) — valor', fmtEUR(m.valorActEUR), gpClass(m.gpEUR)) +
-    statCard('Acciones (USD) — valor', fmtUSD(m.valorActUSD), gpClass(m.gpUSD));
+    statCard('Acciones (USD) — valor', fmtUSD(m.valorActUSD), gpClass(m.gpUSD)) +
+    statCard('Robo Advisor — valor', fmtEUR(m.roboValor), gpClass(m.roboGP));
 
   document.getElementById('topStatsEtfs').innerHTML =
     statCard('Invertido ETFs', fmtEUR(m.totalInvEUR)) +
@@ -831,10 +843,10 @@ function renderChartsFor(tab, m) {
     charts.alloc = new Chart(document.getElementById('allocChart'), {
       type: 'doughnut',
       data: {
-        labels: ['ETFs con dividendo', 'ETFs acumulación', 'Acciones (USD→EUR)', 'Materias primas'],
+        labels: ['ETFs con dividendo', 'ETFs acumulación', 'Acciones (USD→EUR)', 'Materias primas', 'Robo Advisor'],
         datasets: [{
-          data: [m.valorDiv, m.valorAcc, m.valorActUSDinEUR, m.valorActCommodities],
-          backgroundColor: ['#5fd99a', '#6f80f5', '#e0a93a', '#f4c542']
+          data: [m.valorDiv, m.valorAcc, m.valorActUSDinEUR, m.valorActCommodities, m.roboValor],
+          backgroundColor: ['#5fd99a', '#6f80f5', '#e0a93a', '#f4c542', '#f472b6']
         }]
       },
       options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#c7c8cd', boxWidth: 12, font: { size: 11 } } } } }
