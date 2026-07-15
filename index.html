@@ -116,6 +116,24 @@
   .sim-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 4px; }
   .sim-input-sm { width: 80px; background: #1c1f26; color: #e7e7ea; border: 1px solid #343843; border-radius: 6px; padding: 4px 6px; font-size: 12px; text-align: right; }
   input.sim-input-sm:focus { outline: none; border-color: #3a4ed6; }
+  /* ── Ingresos y gastos ── */
+  .month-nav { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; }
+  .month-nav .month-btn { background: #23262e; color: #e7e7ea; border: 1px solid #343843; border-radius: 8px; width: 34px; height: 34px; font-size: 16px; cursor: pointer; }
+  .month-nav .month-btn:hover { background: #2c2f38; }
+  .month-nav input[type="month"] { background: #14161b; color: #e7e7ea; border: 1px solid #343843; border-radius: 8px; padding: 7px 10px; font-size: 13px; }
+  .month-nav .month-label { font-size: 15px; font-weight: 600; text-transform: capitalize; }
+  .bud-name { background: #14161b; color: #e7e7ea; border: 1px solid #343843; border-radius: 6px; padding: 4px 8px; font-size: 12.5px; width: 100%; max-width: 220px; }
+  .bud-name:focus { outline: none; border-color: #3a4ed6; }
+  .bud-name.cat { font-weight: 600; color: #c7c8cd; }
+  .bud-amount { width: 92px; text-align: right; background: #14161b; color: #e7e7ea; border: 1px solid #343843; border-radius: 6px; padding: 4px 6px; font-size: 12.5px; }
+  .bud-amount:focus { outline: none; border-color: #3a4ed6; }
+  tr.cat-head td { background: #20232b; font-weight: 600; }
+  tr.cat-head .cat-sub { color: #9a9ca3; font-weight: 600; }
+  .m-chk { width: 15px; height: 15px; accent-color: #3a4ed6; cursor: pointer; }
+  .bud-block-title { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; margin: 0 0 10px; color: #c7c8cd; }
+  .bud-block-title .pill { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
+  .pill.fijo { background: #232a4a; color: #93a3ff; }
+  .pill.punt { background: #3a2b18; color: #e0a93a; }
 </style>
 </head>
 <body>
@@ -178,6 +196,7 @@
     <button class="tab-btn" data-tab="simulacion">🔮 Simulación</button>
     <button class="tab-btn" data-tab="materias">🥇 Materias primas</button>
     <button class="tab-btn" data-tab="robo">🤖 Robo Advisor</button>
+    <button class="tab-btn" data-tab="gastos">💰 Ingresos y gastos</button>
   </div>
 
   <!-- ===== RESUMEN ===== -->
@@ -321,6 +340,54 @@
       <h2>Acciones individuales (cuenta USD)</h2>
       <table id="stocksTable"><thead></thead><tbody></tbody></table>
     </section>
+  </div>
+
+  <!-- ===== INGRESOS Y GASTOS ===== -->
+  <div class="page" data-page="gastos">
+    <div class="month-nav">
+      <button class="month-btn" id="budPrev">◀</button>
+      <input type="month" id="budMonth">
+      <button class="month-btn" id="budNext">▶</button>
+      <span class="month-label" id="budMonthLabel"></span>
+    </div>
+    <div class="grid-top" id="topStatsGastos"></div>
+
+    <section>
+      <h2>Ingresos del mes</h2>
+      <div style="margin-bottom:10px;">
+        <button class="btn small" id="budFillDiv">💶 Rellenar dividendos</button>
+        <span id="budDivStatus" style="font-size:12px;color:#9a9ca3;margin-left:6px;"></span>
+      </div>
+      <table id="budIngresosTable" style="max-width:520px;"><thead></thead><tbody></tbody></table>
+    </section>
+
+    <section>
+      <h2>Gastos del mes</h2>
+      <div class="cols">
+        <div>
+          <p class="bud-block-title"><span class="pill fijo">Fijos</span> Gastos mensuales</p>
+          <table id="budGastosFijosTable"><thead></thead><tbody></tbody></table>
+        </div>
+        <div>
+          <p class="bud-block-title"><span class="pill punt">Puntuales</span> Gastos de este mes</p>
+          <table id="budGastosPuntTable"><thead></thead><tbody></tbody></table>
+        </div>
+      </div>
+      <div style="margin-top:14px;">
+        <button class="btn small" id="budAddCat">+ Añadir categoría</button>
+      </div>
+    </section>
+
+    <div class="charts-row">
+      <div class="chart-card">
+        <h3>Gastos por categoría (este mes)</h3>
+        <div class="chart-wrap"><canvas id="budCatChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Ingresos vs. gastos (año)</h3>
+        <div class="chart-wrap"><canvas id="budYearChart"></canvas></div>
+      </div>
+    </div>
   </div>
 
 <script>
@@ -521,6 +588,7 @@ function applyMigrations(d) {
   if (!Array.isArray(d.simulations)) d.simulations = [];
   if (!Array.isArray(d.raHistory)) d.raHistory = [];
   if (!Array.isArray(d.robo)) d.robo = [];
+  if (!d.budget || typeof d.budget !== 'object' || !d.budget.months) d.budget = { months: {} };
   if (!Array.isArray(d.commodities)) d.commodities = JSON.parse(JSON.stringify(SEED.commodities));
   // Rellenar dividendoUd si falta (dato añadido a posteriori)
   const DIV_DEFAULTS = { FGEQ: 0.21, VGWD: 2.08, EHDV: 1.41 };
@@ -1069,6 +1137,7 @@ function renderAll() {
 
   renderChartsFor(currentTab, m);
   if (currentTab === 'simulacion') renderSimulacion();
+  if (currentTab === 'gastos') renderBudget();
 }
 
 function switchTab(tab) {
@@ -1396,98 +1465,4 @@ document.getElementById('linkFileBtn').addEventListener('click', () => {
 function renderRoboAdvisor() {
   const tbody = document.querySelector('#raTable tbody');
   if (!tbody) return;
-  const rows = (data.robo || []).slice().sort((a, b) => a.fecha.localeCompare(b.fecha));
-
-  tbody.innerHTML = rows.map((r, i) => {
-    const prev = i > 0 ? rows[i-1].valor : null;
-    const diff = prev !== null ? r.valor - prev : null;
-    const diffHtml = diff === null ? '—' : `<span class="${diff>=0?'pos':'neg'}">${diff>=0?'+':''}${fmtEUR(diff)}</span>`;
-    return `<tr>
-      <td>${r.fecha}</td>
-      <td class="${r.valor >= 0 ? 'pos' : 'neg'}">${fmtEUR(r.valor)}</td>
-      <td>${r.aportado != null ? fmtEUR(r.aportado) : '—'}</td>
-      <td>${diffHtml}</td>
-      <td><button class="del-btn" data-ra="${i}">✕</button></td>
-    </tr>`;
-  }).join('') || '<tr><td colspan="5" style="color:#9a9ca3;text-align:center;padding:16px;">Sin registros aún</td></tr>';
-  tbody.querySelectorAll('.del-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
-      const idx = +e.target.dataset.ra;
-      const sorted = (data.robo || []).slice().sort((a, b) => a.fecha.localeCompare(b.fecha));
-      const toRemove = sorted[idx];
-      data.robo = data.robo.filter(r => r !== toRemove);
-      save(); renderRoboAdvisor();
-    });
-  });
-  // Gráfica
-  destroyChart('ra');
-  if (document.getElementById('raChart') && rows.length > 0) {
-    charts.ra = new Chart(document.getElementById('raChart'), {
-      type: 'line',
-      data: {
-        labels: rows.map(r => r.fecha),
-        datasets: [
-          {
-            label: 'Ganancia (€)',
-            data: rows.map(r => r.valor),
-            borderColor: '#5fd99a', backgroundColor: 'rgba(95,217,154,0.12)',
-            fill: true, tension: 0.3, pointRadius: 4
-          },
-          {
-            label: 'Aportado (€)',
-            data: rows.map(r => r.aportado ?? null),
-            borderColor: '#6f80f5', backgroundColor: 'rgba(111,128,245,0.10)',
-            fill: true, tension: 0.3, pointRadius: 4, spanGaps: true
-          }
-        ]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: {
-          legend: { position: 'bottom', labels: { color: '#c7c8cd', boxWidth: 12, font: { size: 11 } } },
-          tooltip: { mode: 'index', intersect: false, callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmtEUR(ctx.parsed.y)}` } }
-        },
-        scales: {
-          x: { ticks: { color: '#9a9ca3' }, grid: { color: '#262931' } },
-          y: { ticks: { color: '#9a9ca3', callback: v => v + '€' }, grid: { color: '#262931' } }
-        }
-      }
-    });
-  }
-}
-
-document.getElementById('raAddBtn').addEventListener('click', () => {
-  const fecha = document.getElementById('raDate').value;
-  const valor = parseFloat(document.getElementById('raGanancia').value);
-  const aportado = parseFloat(document.getElementById('raAportado').value) || undefined;
-  if (!fecha || isNaN(valor)) return;
-  if (!data.robo) data.robo = [];
-  data.robo.push({ fecha, valor, ...(aportado !== undefined && { aportado }) });
-  save(); renderRoboAdvisor();
-  document.getElementById('raDate').value = '';
-  document.getElementById('raGanancia').value = '';
-  document.getElementById('raAportado').value = '';
-});
-
-document.getElementById('raSaveHoyBtn').addEventListener('click', () => {
-  const m = computeAll();
-  if (!data.robo) data.robo = [];
-  const fecha = new Date().toISOString().slice(0, 10);
-  const valor = +(m.gpEUR + m.gpUSDinEUR + (m.gpCommodities||0)).toFixed(2);
-  const aportado = +m.totalInvCombEUR.toFixed(2);
-  data.robo.push({ fecha, valor, aportado });
-  save(); renderRoboAdvisor();
-});
-
-// Hook: render cuando se entra a la pestaña robo
-document.querySelectorAll('.tab-btn').forEach(btn => {
-  if (btn.dataset.tab === 'robo') {
-    btn.addEventListener('click', renderRoboAdvisor);
-  }
-});
-
-load();
-switchTab('resumen');
-</script>
-</body>
-</html>
+  const rows = (data.robo || []).slice().sort((a, b) => a.fecha.localeCompare(b.fech
